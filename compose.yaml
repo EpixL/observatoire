@@ -1,0 +1,74 @@
+# VEILLE — observatoire : lots 0-2 (collecte + événements). Aucun port n'est figé : tout vient du .env.
+# Déploiement Portainer : coller ce fichier dans une stack et définir les variables du .env.example.
+name: veille
+
+x-app-build: &app_build
+  context: .
+  dockerfile: backend/Dockerfile
+
+services:
+  db:
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?définir POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?définir POSTGRES_DB}
+    volumes:
+      - ${DATA_DIR:?définir DATA_DIR}/postgres:/var/lib/postgresql/data
+    # PAS de "ports:" : la base n'est joignable que par le réseau interne de la stack.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: ${DB_MEM_LIMIT:-768m}
+    networks: [internal]
+
+  init:  # migrations + synchronisation du registre des sources, puis s'arrête
+    build: *app_build
+    image: veille-backend:local
+    entrypoint: ["sh", "-c", "python -m app.cli migrate && python -m app.cli sync-sources"]
+    restart: "no"
+    environment: &app_env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      COLLECTOR_CONTACT: ${COLLECTOR_CONTACT:?définir COLLECTOR_CONTACT (identifie notre User-Agent)}
+      COLLECTOR_JITTER_FRACTION: ${COLLECTOR_JITTER_FRACTION:-0.2}
+      COLLECTOR_RESPECT_ROBOTS: ${COLLECTOR_RESPECT_ROBOTS:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [internal]
+
+  worker:
+    build: *app_build
+    image: veille-backend:local
+    command: ["worker"]
+    restart: unless-stopped
+    environment: *app_env
+    volumes:
+      - ${DATA_DIR}/snapshots:/data/snapshots
+    depends_on:
+      init: {condition: service_completed_successfully}
+    mem_limit: ${APP_MEM_LIMIT:-384m}
+    networks: [internal, egress]
+
+  api:
+    build: *app_build
+    image: veille-backend:local
+    entrypoint: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment: *app_env
+    ports:
+      # Publié uniquement sur l'adresse LAN choisie, sur le port choisi (rien en dur ici).
+      - "${API_BIND_ADDR:?définir API_BIND_ADDR}:${API_HOST_PORT:?définir API_HOST_PORT}:8000"
+    depends_on:
+      init: {condition: service_completed_successfully}
+    mem_limit: ${APP_MEM_LIMIT:-384m}
+    networks: [internal, lan]
+
+networks:
+  internal:
+    internal: true      # db et api n'ont pas d'accès Internet sortant
+  egress: {}            # le worker sort sur Internet (collecte)
+  lan: {}               # nécessaire pour qu'un port publié fonctionne (un réseau "internal" ne publie rien)

@@ -117,7 +117,7 @@ def main(argv=None):
     sub.add_parser("verify-provenance").set_defaults(fn=cmd_verify)
     args = ap.parse_args(argv)
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    args.fn(args, load_settings())
+    args.fn(args, load_settings(require_db=args.cmd not in ("smoke", "discover-feeds")))
 
 
 if __name__ == "__main__":

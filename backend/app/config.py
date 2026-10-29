@@ -29,10 +29,10 @@ class Settings:
     extra: dict[str, str] = field(default_factory=dict)
 
 
-def load_settings() -> Settings:
+def load_settings(require_db: bool = True) -> Settings:
     contact = os.environ.get("COLLECTOR_CONTACT", "contact-non-renseigne")
     return Settings(
-        database_url=_env("DATABASE_URL"),
+        database_url=_env("DATABASE_URL") if require_db else os.environ.get("DATABASE_URL", ""),
         config_dir=Path(_env("CONFIG_DIR", "/app/config")),
         snapshot_dir=Path(_env("SNAPSHOT_DIR", "/data/snapshots")),
         user_agent=f"VEILLE-observatoire/0.1 (veille privee; {contact})",
