@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>CERT-FR - Alertes de sécurité (FIXTURE FICTIVE)</title>
+    <link>https://www.cert.ssi.gouv.fr/alerte/</link>
+    <description>Fixture fictive</description>
+    <item>
+      <title>CERTFR-2026-ALE-001 : Vulnérabilité dans un produit fictif Exemple</title>
+      <link>https://www.cert.ssi.gouv.fr/alerte/CERTFR-2026-ALE-001/</link>
+      <guid isPermaLink="false">CERTFR-2026-ALE-001</guid>
+      <pubDate>Tue, 27 Oct 2026 14:30:00 +0100</pubDate>
+      <description>&lt;p&gt;Une vulnérabilité critique fictive affecte le produit Exemple. Des correctifs sont disponibles.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>CERTFR-2026-ALE-002 : Campagne d'exploitation fictive</title>
+      <link>https://www.cert.ssi.gouv.fr/alerte/CERTFR-2026-ALE-002/</link>
+      <guid isPermaLink="false">CERTFR-2026-ALE-002</guid>
+      <pubDate>Wed, 28 Oct 2026 09:10:00 +0100</pubDate>
+      <description>&lt;p&gt;Le CERT-FR a connaissance d'une campagne fictive visant des services exposés.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

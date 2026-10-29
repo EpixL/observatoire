@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>France 24 - FIXTURE FICTIVE</title>
+    <link>https://www.france24.com/fr/</link>
+    <description>Fixture fictive</description>
+    <item>
+      <title>Fermeture temporaire d'un aéroport de la région Exemple</title>
+      <link>https://www.france24.com/fr/europe/20261028-fermeture-aeroport-exemple?utm_source=rss&amp;xtor=RSS-3</link>
+      <guid isPermaLink="false">fx-24-0001</guid>
+      <pubDate>Wed, 28 Oct 2026 11:00:00 GMT</pubDate>
+      <description>Un aéroport de la région Exemple est fermé jusqu'à nouvel ordre selon les autorités locales (AFP).</description>
+    </item>
+    <item>
+      <title>Sans date : brève fictive</title>
+      <link>https://www.france24.com/fr/monde/20261028-breve-sans-date</link>
+      <guid isPermaLink="false">fx-24-0002</guid>
+      <description>Brève sans date de publication.</description>
+    </item>
+  </channel>
+</rss>

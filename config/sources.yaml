@@ -1,0 +1,213 @@
+# Registre des sources V1 (plan §3). Lu par le worker au démarrage (commande `sync-sources`).
+#
+# verification_status :
+#   unverified_blocked  endpoint jamais atteint depuis l'environnement cloud (réseau filtré) :
+#                       collecteur testé sur fixtures uniquement -> « à vérifier sur le Pi »
+#   verified            endpoint appelé avec succès (mettre à jour après scripts/smoke-collectors.sh)
+#   to_discover         URL du flux inconnue ; utiliser `python -m app.cli discover-feeds`
+#
+# Cadences = poll_interval_s : volontairement prudentes (plan : RSS 2-5 min SI PERMIS ; pages 10-15 min).
+# Elles sont à resserrer seulement après lecture des conditions d'utilisation et mesure sur le Pi.
+
+defaults:
+  default_tz: Europe/Paris      # fuseau supposé (et signalé "no_timezone") pour les dates sans fuseau
+  retention_days: 90            # snapshots bruts (plan §16)
+  priority: V1
+
+sources:
+  - id: france-diplomatie-cv
+    name: France Diplomatie — Conseils aux voyageurs (page d'accueil, dernières minutes)
+    organisation: Ministère de l'Europe et des Affaires étrangères
+    source_type: autorite
+    origin_family: fr-diplomatie
+    zone: monde
+    competence: Conseils aux voyageurs, consignes de sécurité à l'étranger
+    languages: [fr]
+    connector: html_page
+    access_mode: html_page
+    canonical_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/
+    endpoint_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/
+    allowed_domains: [diplomatie.gouv.fr]
+    poll_interval_s: 900
+    licence: "Licence Ouverte Etalab 2.0 (à confirmer pour ce contenu)"
+    quota_note: "Aucun quota publié. Respecter robots.txt."
+    verification_status: unverified_blocked
+    options:
+      content_selector: "main"
+
+  - id: france-diplomatie-rss
+    name: France Diplomatie — flux RSS
+    organisation: Ministère de l'Europe et des Affaires étrangères
+    source_type: autorite
+    origin_family: fr-diplomatie
+    zone: monde
+    competence: Actualités et dernières minutes (le flux RSS dédié aux conseils par pays reste à identifier)
+    languages: [fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/
+    # URL SUPPOSÉE (flux général du site). À remplacer par le flux « conseils aux voyageurs »
+    # trouvé via `python -m app.cli discover-feeds france-diplomatie-cv` sur le Pi.
+    endpoint_url: https://www.diplomatie.gouv.fr/spip.php?page=backend&lang=fr
+    allowed_domains: [diplomatie.gouv.fr]
+    poll_interval_s: 300
+    licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
+    quota_note: "Aucun quota publié."
+    verification_status: unverified_blocked
+
+  - id: easa-czib
+    name: EASA — Conflict Zone Information Bulletins (liste)
+    organisation: Agence de l'Union européenne pour la sécurité aérienne (EASA)
+    source_type: autorite
+    origin_family: easa
+    zone: monde
+    competence: Restrictions et recommandations aériennes dans les zones de conflit
+    languages: [en]
+    connector: html_page
+    access_mode: html_page
+    canonical_url: https://www.easa.europa.eu/en/domains/air-operations/czibs
+    endpoint_url: https://www.easa.europa.eu/en/domains/air-operations/czibs
+    allowed_domains: [easa.europa.eu]
+    poll_interval_s: 600
+    licence: "Réutilisation EASA : voir conditions du site (à vérifier)."
+    quota_note: "Des flux RSS/JSON/CSV existent d'après la page EASA ; URL exacte à découvrir (discover-feeds)."
+    verification_status: unverified_blocked
+    options:
+      content_selector: "main"
+
+  - id: ioda-fr
+    name: IODA — interruptions Internet, France
+    organisation: Georgia Tech (Internet Intelligence Lab) — IODA
+    source_type: mesure
+    origin_family: ioda
+    zone: FR
+    competence: Détection d'interruptions Internet par pays/région/réseau
+    languages: [en]
+    connector: ioda
+    access_mode: json_api
+    canonical_url: https://ioda.inetintel.cc.gatech.edu/
+    endpoint_url: https://api.ioda.inetintel.cc.gatech.edu/v2
+    allowed_domains: [api.ioda.inetintel.cc.gatech.edu, ioda.inetintel.cc.gatech.edu]
+    poll_interval_s: 600
+    licence: "Données de recherche ; conditions d'usage de l'API à confirmer."
+    quota_note: "Limites d'API non documentées ici : 429 géré comme état technique."
+    verification_status: unverified_blocked
+    options:
+      lookback_hours: 48
+      entities:
+        - {type: country, code: FR}
+
+  - id: cert-fr-alertes
+    name: CERT-FR — alertes de sécurité
+    organisation: CERT-FR (ANSSI)
+    source_type: autorite
+    origin_family: cert-fr
+    zone: FR
+    competence: Alertes cyber ayant un effet sur les services (pas un indicateur géopolitique en soi)
+    languages: [fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://cert.cyber.gouv.fr/flux-rss
+    endpoint_url: https://www.cert.ssi.gouv.fr/alerte/feed/
+    allowed_domains: [cert.ssi.gouv.fr, cert.cyber.gouv.fr, ssi.gouv.fr, cyber.gouv.fr]
+    poll_interval_s: 900
+    priority: V1 facultative
+    licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
+    quota_note: "Aucun quota publié. L'ancien domaine peut rediriger vers cert.cyber.gouv.fr."
+    verification_status: unverified_blocked
+
+  - id: cert-fr-actualite
+    name: CERT-FR — actualités
+    organisation: CERT-FR (ANSSI)
+    source_type: autorite
+    origin_family: cert-fr
+    zone: FR
+    competence: Actualités et campagnes documentées
+    languages: [fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://cert.cyber.gouv.fr/flux-rss
+    endpoint_url: https://www.cert.ssi.gouv.fr/actualite/feed/
+    allowed_domains: [cert.ssi.gouv.fr, cert.cyber.gouv.fr, ssi.gouv.fr, cyber.gouv.fr]
+    poll_interval_s: 900
+    priority: V1 facultative
+    licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
+    quota_note: "Aucun quota publié."
+    verification_status: unverified_blocked
+
+  - id: sgdsn-vigipirate
+    name: Vigipirate — posture en cours (SGDSN)
+    organisation: SGDSN — Secrétariat général de la défense et de la sécurité nationale
+    source_type: autorite
+    origin_family: sgdsn
+    zone: FR
+    competence: Niveau du plan Vigipirate (vigilance / sécurité renforcée-risque attentat / urgence attentat)
+    languages: [fr]
+    connector: html_page
+    access_mode: html_page
+    canonical_url: https://www.sgdsn.gouv.fr/
+    # URL SUPPOSÉE : la page exacte du niveau Vigipirate doit être confirmée sur le Pi.
+    endpoint_url: https://www.sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate
+    allowed_domains: [sgdsn.gouv.fr]
+    poll_interval_s: 900
+    licence: "À confirmer"
+    quota_note: "Aucun quota publié."
+    verification_status: unverified_blocked
+    options:
+      content_selector: "main"
+
+  - id: france24-fr
+    name: France 24 — flux d'actualité (FR)
+    organisation: France Médias Monde
+    source_type: media
+    origin_family: media-france24
+    zone: monde
+    competence: Découverte d'événements ; métadonnées du flux uniquement (titres/résumés), jamais de contournement de paywall
+    languages: [fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://www.france24.com/fr/
+    endpoint_url: https://www.france24.com/fr/rss
+    allowed_domains: [france24.com]
+    poll_interval_s: 600
+    licence: "Usage du flux RSS selon conditions du site : titres et liens uniquement."
+    quota_note: "Aucun quota publié."
+    verification_status: unverified_blocked
+
+  - id: nato-news
+    name: OTAN — actualités et communiqués
+    organisation: OTAN
+    source_type: autorite
+    origin_family: nato
+    zone: monde
+    competence: Décisions, consultations, déclarations officielles
+    languages: [en, fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://www.nato.int/cps/en/natohq/news.htm
+    endpoint_url: null          # URL du flux inconnue -> discover-feeds sur le Pi
+    allowed_domains: [nato.int]
+    poll_interval_s: 600
+    enabled: false
+    licence: "À confirmer"
+    quota_note: ""
+    verification_status: to_discover
+
+  - id: eeas-presse
+    name: UE / SEAE — communiqués
+    organisation: Service européen pour l'action extérieure
+    source_type: autorite
+    origin_family: eeas
+    zone: monde
+    competence: Décisions, sanctions, déclarations
+    languages: [en, fr]
+    connector: feed
+    access_mode: feed
+    canonical_url: https://www.eeas.europa.eu/eeas/press-material_en
+    endpoint_url: null
+    allowed_domains: [eeas.europa.eu]
+    poll_interval_s: 600
+    enabled: false
+    licence: "À confirmer"
+    quota_note: ""
+    verification_status: to_discover

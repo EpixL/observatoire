@@ -1,0 +1,5 @@
+{"type": "outages.events", "metadata": {"fixture": "FICTIVE - schema reconstruit de memoire"}, "error": null,
+ "data": [
+  {"location": "country/FR", "start": 1793180400, "duration": 1800, "score": 12345.6, "datasource": "bgp", "overlaps_window": 1},
+  {"location": "country/FR", "start": 1793188000, "duration": 600, "score": 87.0, "datasource": "ping-slash24"}
+ ]}
