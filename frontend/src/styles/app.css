@@ -101,7 +101,7 @@ a { color: var(--data); }
 .conclusion .ambig { color: var(--watch); font-weight: 600; }
 .hyp-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .hyp { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
-.hyp summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; min-height: 28px; }
+.hyp summary { cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 44px; }
 .hyp .hid { font-weight: 700; color: var(--data); }
 .verdict { font-size: 12.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); margin-left: auto; white-space: nowrap; }
 .verdict.soutenue { color: var(--ok); border-color: var(--ok); }

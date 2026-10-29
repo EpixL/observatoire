@@ -1,0 +1,18 @@
+server {
+  listen ${PORT};
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Interface autonome : aucune ressource externe (polices, tuiles, scripts) n'est autorisée.
+  add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "no-referrer" always;
+
+  location = /healthz { access_log off; add_header Content-Type text/plain; return 200 "ok\n"; }
+
+  location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; }
+
+  # Plus tard : l'API (REST + SSE) sera proxifiée ici par le reverse proxy du projet, ex. `location /api/ { proxy_pass ...; proxy_buffering off; }`
+  location / { add_header Cache-Control "no-cache"; try_files $uri /index.html; }
+}

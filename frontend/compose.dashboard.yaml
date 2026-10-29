@@ -1,0 +1,12 @@
+# Lancement autonome du dashboard (maquette) : `PORT=8080 docker compose -f compose.dashboard.yaml up --build`
+# Ne remplace pas le compose.yaml racine (propriété de la session backend).
+services:
+  dashboard:
+    build: .
+    environment:
+      PORT: ${PORT:?définir PORT, par exemple PORT=8080}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT}:${PORT}"
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
