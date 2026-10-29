@@ -12,7 +12,7 @@ listé en « Questions pour David » en bas : je n'ai rien décidé à sa place.
 | OS | Debian 13 | — |
 | Conteneurs | Docker + Portainer déjà en place | version de Docker / plugin Compose |
 | Réseau | IP LAN 192.168.1.50 | Ethernet ou Wi-Fi ? IPv6 actif ? |
-| Stockage | Btrfs | **support : carte SD, SSD USB ou NVMe ?** (voir risque ci-dessous) ; espace libre |
+| Stockage | Btrfs ; données sur le disque `/mnt/homelab` (pas le disque système) | **support : carte SD, SSD USB ou NVMe ?** (voir risque ci-dessous) ; espace libre |
 
 **Risque à connaître : le support de stockage.** PostgreSQL écrit en continu. Sur une carte SD, ce n'est pas
 recommandé (usure, corruptions lors des coupures). Un SSD (USB ou NVMe) est fortement conseillé pour le dossier
@@ -62,11 +62,11 @@ reste à valider : voir question 6.
 
 ## 6. Quotas et accès vérifiés ?
 
-**Non, et c'est le point bloquant du lot 0.** Le réseau de l'environnement de développement refuse tous les
-domaines des sources (erreur « 403 » du proxy sortant). Aucun quota, aucune URL de flux, aucune licence n'a pu
-être confirmé en direct. Détail source par source : `docs/source-register.md`. Le rapport brut du test est conservé :
-`docs/smoke-cloud-2026-10-29.json`. Le critère de sortie du lot 0 (« quotas et accès vérifiés ») sera donc
-rempli **après** `scripts/smoke-collectors.sh` sur le Pi et relecture des conditions d'utilisation par David.
+**Partiellement.** Depuis le cloud, tout était bloqué (`docs/smoke-cloud-2026-10-29.json`). Le smoke **réel sur le Pi** du 29/10/2026 a ensuite confirmé
+l'accès à CERT-FR (×2), France 24, EASA (page) et IODA (enveloppe), et a montré deux sources refusant notre accès honnête (RSS France Diplomatie : 403 ;
+Vigipirate : page anti-robot) — désactivées, sans contournement. Quotas et licences restent **non confirmés** (aucune source ne les publie dans les réponses ;
+IODA indique un copyright Georgia Tech). Détail : `docs/source-register.md`. Le critère de sortie du lot 0 sera rempli après le second smoke et la relecture
+des conditions d'utilisation par David (question 8).
 
 ## Questions pour David
 

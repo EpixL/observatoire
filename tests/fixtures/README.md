@@ -14,3 +14,17 @@ l'environnement cloud bloque les domaines des sources réelles (voir `docs/sourc
 
 Quand David aura lancé le script de smoke sur le Pi, on pourra remplacer/compléter ces fichiers par de vraies
 réponses enregistrées (sous-dossier `real/`, avec date et URL de capture).
+
+
+## Fixtures issues du smoke RÉEL sur le Pi (29/10/2026)
+
+Retour de la session homelab (smoke lancé par David). Seuls les éléments suivants sont **réels** ; tout le reste de ces fichiers est du gabarit fictif.
+
+| Fichier | Réel | Fictif / reconstitué |
+|---|---|---|
+| `pages/gcore_challenge_real.html` | texte de la page anti-robot Gcore (titre « Gcore », « Browser Validation Page », « Please enable JavaScript / cookies ») | enveloppe HTML minimale |
+| `pages/easa_real_rows.html` | classes CSS et contenu de **la ligne « Airspace of Mali / CZIB-2017-01R21 »** (dates 31/03/2017, 30/09/2026, 30/04/2027, statut Active, lien) | disposition exacte des cellules (reconstituée) ; 2e ligne « Testistan » entièrement fictive |
+| `json/ioda_real_empty_fr.json` | réponse IODA France sans événement : enveloppe, `format: codf`, `data: []`, mention de copyright | champ `metadata` abrégé |
+| `feeds/cert_fr_maj_mixed_order.xml` | titres et `pubDate` de 3 entrées observées : 1er item de 2015, « [MàJ] … FortiOS (09 février 2024) » daté 2024 | liens, identifiants, résumés, 3e entrée (fictive) |
+
+Les autres fixtures (`ioda_events_fr.json`, pages Vigipirate/conseils, flux France 24) restent **fictives**.

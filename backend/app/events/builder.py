@@ -35,14 +35,17 @@ def _richness(c: ExtractedClaim) -> tuple:
     return (c.occurred_at is not None, bool(c.zone_codes), bool(c.declarant), len(c.quote))
 
 
-def doc_ref_time(doc: Document) -> datetime:
-    if doc.published_at is not None and "future" not in (doc.date_flags or []):
+def doc_ref_time(doc: Document, version=None) -> datetime:
+    flags = doc.date_flags or []
+    if doc.published_at is not None and "future" not in flags and "published_at_is_original_date" not in flags:
         return doc.published_at
+    if "published_at_is_original_date" in flags and version is not None:
+        return version.retrieved_at   # mise à jour : on date l'observation de la mise à jour, pas l'avis d'origine
     return doc.first_seen_at
 
 
-def claim_ref_time(c: Claim, doc: Document) -> datetime:
-    return c.occurred_at or c.period_start or doc_ref_time(doc)
+def claim_ref_time(c: Claim, doc: Document, version=None) -> datetime:
+    return c.occurred_at or c.period_start or doc_ref_time(doc, version)
 
 
 def _review(session: Session, kind: str, now: datetime, reason: str, *, document_id=None, claim_id=None, event_id=None) -> None:
@@ -79,11 +82,17 @@ def store_claims(session: Session, ctx: DocCtx, claims: list[ExtractedClaim], no
             continue
         stale = False
         reasons = list(c.review_reasons)
-        if c.certainty.value == "provisional":
-            ref = c.occurred_at or (doc.published_at if "future" not in (doc.date_flags or []) else None)
-            if "old_publication" in (doc.date_flags or []) or (ref is not None and ref < doc.first_seen_at - STALE_AFTER):
+        flags = doc.date_flags or []
+        dated_by_publication = c.certainty.value == "provisional" or c.category is Category.cyber_advisory
+        if dated_by_publication:
+            ref = c.occurred_at or (doc.published_at if "future" not in flags and "published_at_is_original_date" not in flags else None)
+            if "old_publication" in flags or (ref is not None and ref < doc.first_seen_at - STALE_AFTER):
                 stale = True
                 reasons.append("republication_or_old_event")
+            elif "published_at_is_original_date" in flags and ctx.in_baseline:
+                # mise à jour dont la vraie date est inconnue, vue au tout premier relevé : arriéré, pas une nouveauté
+                stale = True
+                reasons.append("update_date_unknown_in_baseline_backlog")
         row = Claim(
             document_id=doc.id, first_version_id=version.id, claim_key=key, claim_type=c.claim_type.value, category=c.category.value,
             statement=c.statement, subject=c.subject, action=c.action, place_text=c.place_text, zone_codes=c.zone_codes,
@@ -196,7 +205,7 @@ def attach_claim(session: Session, claim: Claim, ctx: DocCtx, now: datetime) -> 
 
     gaz = ctx.gazetteer
     zone = _zone(claim, gaz)
-    ref = claim_ref_time(claim, doc)
+    ref = claim_ref_time(claim, doc, ctx.version)
     window = timedelta(hours=MATCH_WINDOW_H.get(event_type, 48))
     statuses = ("active", "to_verify")
 

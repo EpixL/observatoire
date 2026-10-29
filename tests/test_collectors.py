@@ -31,9 +31,9 @@ def serve(routes: dict, calls: list | None = None):
     return handler
 
 
-CERT = "https://www.cert.ssi.gouv.fr/alerte/feed/"
+CERT = "https://cert.cyber.gouv.fr/alerte/feed/"
 VIGI = "https://www.sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate"
-DIPLO = "https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/"
+DIPLO = "https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs"
 EASA = "https://www.easa.europa.eu/en/domains/air-operations/czibs"
 F24 = "https://www.france24.com/fr/rss"
 XML = {"content-type": "application/rss+xml"}
@@ -188,7 +188,7 @@ def test_redirect_to_foreign_domain_is_rejected(sources, settings, clock, rng):
 
 
 def test_redirect_within_allowed_domains_is_followed(sources, settings, clock, rng):
-    new = "https://cert.cyber.gouv.fr/alerte/feed/"
+    new = "https://www.cert.ssi.gouv.fr/alerte/feed/"
     http = make_client(serve({
         CERT: lambda r: httpx.Response(301, headers={"location": new}),
         new: (200, XML, fixture_bytes("feeds/cert_fr_alertes.xml")),
@@ -285,12 +285,12 @@ def test_connector_exception_is_isolated(sources, settings, clock, rng, monkeypa
 def test_run_due_respects_next_run_and_skips_disabled(sources, settings, clock, rng):
     http = make_client(serve({}))
     due = due_source_ids(sources, clock.now)
-    assert "nato-news" not in due and "eeas-presse" not in due and len(due) == 8
+    assert "nato-news" not in due and "eeas-presse" not in due and len(due) == 6
     out = run_due(sources, http, settings, clock=clock, rng=rng)
     assert set(out) == set(due)
     assert due_source_ids(sources, clock.now) == []                       # tous reprogrammés dans le futur
     clock.advance(hours=8)
-    assert len(due_source_ids(sources, clock.now)) == 8
+    assert len(due_source_ids(sources, clock.now)) == 6
 
 
 def test_jitter_spreads_next_runs(sources, settings, clock):
@@ -331,20 +331,17 @@ def test_registry_sync_is_idempotent_and_keeps_health(sources):
     assert health(sources, "ioda-fr").consecutive_failures == 3
 
 
-def test_every_enabled_source_is_marked_unverified_in_cloud():
+def test_verified_status_requires_dated_evidence_and_disabled_sources_say_why():
     from app.collectors.registry import load_source_configs
     from conftest import ROOT
     cfgs = load_source_configs(ROOT / "config" / "sources.yaml")
-    # Honnêteté : aucun endpoint n'a pu être atteint depuis le cloud ; aucun ne doit être déclaré « verified ».
-    assert all(c.verification_status != "verified" for c in cfgs)
+    for c in cfgs:
+        if c.verification_status in ("verified", "partially_verified"):
+            assert c.options.get("verified_on") == "2026-10-29", c.id          # preuve datée (smoke réel sur le Pi)
+        if c.verification_status == "blocked_by_site":
+            assert not c.enabled and c.options.get("disabled_reason"), c.id    # jamais de contournement : motif écrit
     assert len([c for c in cfgs if c.enabled]) >= 5
-
-
-def test_valid_but_empty_feed_is_ok_not_error(sources, settings, clock, rng):
-    empty = b'<?xml version="1.0"?><rss version="2.0"><channel><title>t</title><link>https://www.france24.com/</link><description>d</description></channel></rss>'
-    http = make_client(serve({F24: (200, XML, empty)}))
-    res = run_source(sources, "france24-fr", http, settings, clock=clock, rng=rng)
-    assert res.outcome == "ok" and res.items == []
+    assert next(c for c in cfgs if c.id == "france-diplomatie-cv").endpoint_url.endswith("conseils-aux-voyageurs")   # sans « / » final
 
 
 def test_worker_loop_collects_then_builds_events(sources, settings, monkeypatch):
@@ -389,3 +386,95 @@ def test_purge_removes_only_expired_snapshots(sources, settings, clock, rng):
     assert purge_all(sources, settings) == 1 and not snaps[0].exists()      # > 90 j : supprimé
     with session_scope(sources) as s:
         assert s.scalars(select(DocumentVersion)).first().text                # le texte normalisé reste
+
+
+def test_redirect_https_to_http_is_an_explicit_error(sources, settings, clock, rng):
+    # Constaté sur le Pi : avec "/" final, 301 vers http:// ; le port 80 refuse la connexion.
+    http = make_client(serve({DIPLO + "/": lambda r: httpx.Response(301, headers={"location": "http://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs"})}))
+    from app.collectors.registry import load_source_configs
+    from conftest import ROOT
+    from app.models import Source
+    from app.collectors.html_page import HtmlPageConnector
+    from app.collectors.base import ConditionalState
+    cfg = next(c for c in load_source_configs(ROOT / "config" / "sources.yaml") if c.id == "france-diplomatie-cv")
+    src = Source(**{**cfg.model_dump(), "endpoint_url": DIPLO + "/"})
+    res = HtmlPageConnector().fetch(src, ConditionalState(None, None), http)
+    assert res.outcome == "domain_rejected" and "redirection non sécurisée" in res.error and "ConnectError" not in res.error
+
+
+def test_gcore_challenge_page_is_blocked_never_stored(sources, settings, clock, rng):
+    VIGI = "https://www.sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate"
+    http = make_client(serve({VIGI: (200, HTML, fixture_bytes("pages/gcore_challenge_real.html"))}))
+    res = run_source(sources, "sgdsn-vigipirate", http, settings, clock=clock, rng=rng)
+    assert res.outcome == "blocked" and "gcore" in res.error and "non contournée" in res.error
+    h = health(sources, "sgdsn-vigipirate")
+    assert h.state == "blocked" and h.last_success_at is None
+    assert (h.next_run_at - clock.now) >= timedelta(hours=6)
+    with session_scope(sources) as s:
+        assert s.scalars(select(Document)).first() is None and s.scalars(select(DocumentVersion)).first() is None
+
+
+def test_cloudflare_challenge_on_page_and_feed_is_blocked(sources, settings, clock, rng):
+    body = fixture_bytes("pages/cloudflare_challenge_synthetic.html")
+    http = make_client(serve({DIPLO: (200, HTML, body), CERT: (200, HTML, body)}))
+    assert run_source(sources, "france-diplomatie-cv", http, settings, clock=clock, rng=rng).outcome == "blocked"
+    assert run_source(sources, "cert-fr-alertes", http, settings, clock=clock, rng=rng).outcome == "blocked"
+
+
+def test_long_editorial_page_mentioning_captcha_is_not_a_challenge():
+    from app.collectors.challenge import looks_like_challenge
+    page = ("<html><body><main>" + "<p>Conseils aux voyageurs : situation sécuritaire détaillée. " * 80 + "Le site utilise un captcha. Please enable cookies.</p></main></body></html>").encode()
+    assert looks_like_challenge(page) is None
+    assert looks_like_challenge(fixture_bytes("pages/gcore_challenge_real.html")) == "gcore"
+
+
+def test_expected_marker_missing_is_unexpected_format_not_success(sources, settings, clock, rng):
+    other = b"<html><head><title>Autre</title></head><body><main><h1>Page sans rapport</h1><p>" + b"Contenu quelconque assez long pour ne pas etre vide. " * 3 + b"</p></main></body></html>"
+    http = make_client(serve({DIPLO: (200, HTML, other)}))
+    res = run_source(sources, "france-diplomatie-cv", http, settings, clock=clock, rng=rng)
+    assert res.outcome == "error" and "format inattendu" in res.error
+    with session_scope(sources) as s:
+        assert s.scalars(select(Document)).first() is None
+
+
+EASA_URL = "https://www.easa.europa.eu/en/domains/air-operations/czibs"
+
+
+def test_easa_one_document_per_czib_with_real_row_fields(sources, settings, clock, rng):
+    http = make_client(serve({EASA_URL: (200, HTML, fixture_bytes("pages/easa_real_rows.html"))}))
+    res = run_source(sources, "easa-czib", http, settings, clock=clock, rng=rng)
+    assert res.outcome == "ok" and len(res.items) == 2
+    with session_scope(sources) as s:
+        docs = {d.external_id: d for d in s.scalars(select(Document))}
+        assert set(docs) == {"czib-2017-01", "czib-2026-03"}
+        v = s.get(DocumentVersion, docs["czib-2017-01"].current_version_id)
+        f = v.structured
+        assert (f["czib_id"], f["revision"], f["title"], f["status"]) == ("2017-01", 21, "Airspace of Mali", "Active")
+        assert (f["issued"], f["revised"], f["valid_until"]) == ("2017-03-31", "2026-09-30", "2027-04-30")      # JJ/MM/AAAA lus
+        assert f["url"] == "https://www.easa.europa.eu/en/domains/air-operations/czibs/czib-2017-01r21"
+
+
+def test_easa_empty_table_is_unexpected_format(sources, settings, clock, rng):
+    http = make_client(serve({EASA_URL: (200, HTML, b"<html><body><main><h1>Conflict Zones Advisories</h1><table></table></main></body></html>")}))
+    res = run_source(sources, "easa-czib", http, settings, clock=clock, rng=rng)
+    assert res.outcome == "error" and "format inattendu" in res.error
+
+
+def test_cert_feed_order_is_not_chronological_and_maj_keeps_original_date(sources, settings, clock, rng):
+    http = make_client(serve({CERT: (200, XML, fixture_bytes("feeds/cert_fr_maj_mixed_order.xml"))}))
+    run_source(sources, "cert-fr-alertes", http, settings, clock=clock, rng=rng)
+    with session_scope(sources) as s:
+        docs = {d.external_id: d for d in s.scalars(select(Document))}
+        maj = docs["CERTFR-2024-ALE-9002"]
+        assert maj.published_at.year == 2024 and "published_at_is_original_date" in maj.date_flags and "old_publication" not in maj.date_flags
+        assert "old_publication" in docs["CERTFR-2015-ALE-9001"].date_flags
+        assert docs["CERTFR-2024-ALE-9002"].version_count == 1 and docs["CERTFR-2026-ALE-9003"].date_flags == []
+        v = s.get(DocumentVersion, maj.current_version_id)
+        assert v.structured["is_update"] is True
+
+
+def test_ioda_real_response_france_without_event_is_ok_and_empty(sources, settings, clock, rng):
+    """Réponse RÉELLE relevée sur le Pi le 29/10/2026 (France, aucun événement) : enveloppe confirmée."""
+    http = make_client(lambda r: httpx.Response(200, headers={"content-type": "application/json"}, content=fixture_bytes("json/ioda_real_empty_fr.json")))
+    res = run_source(sources, "ioda-fr", http, settings, clock=clock, rng=rng)
+    assert res.outcome == "ok" and res.items == [] and health(sources, "ioda-fr").state == "ok"

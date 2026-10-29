@@ -24,15 +24,17 @@ Choisir un port absent des deux listes pour `API_HOST_PORT`. La base de données
 ### Dossiers de données (Btrfs)
 
 ```bash
-sudo mkdir -p /srv/veille/{postgres,snapshots}
-sudo chattr +C /srv/veille/postgres        # AVANT le premier démarrage, dossier VIDE : désactive le copy-on-write de Btrfs
-lsattr -d /srv/veille/postgres             # doit afficher « C »
-sudo chown 70:70 /srv/veille/postgres      # utilisateur « postgres » de l'image postgres:16-alpine
-sudo chown 10001:10001 /srv/veille/snapshots   # utilisateur de l'image applicative
+# Sur ce Pi : disque Btrfs /mnt/homelab (PAS le disque système). Le chemin vient de DATA_DIR dans .env, jamais écrit en dur.
+export DATA_DIR=/mnt/homelab/veille            # = la valeur de DATA_DIR dans .env
+sudo mkdir -p "$DATA_DIR"/{postgres,snapshots}
+sudo chattr +C "$DATA_DIR/postgres"            # AVANT le premier démarrage, dossier VIDE : désactive le copy-on-write de Btrfs
+lsattr -d "$DATA_DIR/postgres"                 # doit afficher « C »
+sudo chown 70:70 "$DATA_DIR/postgres"          # utilisateur « postgres » de l'image postgres:16-alpine
+sudo chown 10001:10001 "$DATA_DIR/snapshots"   # utilisateur de l'image applicative
 ```
 Pourquoi `chattr +C` : le copy-on-write de Btrfs fragmente les fichiers de base de données qui se réécrivent en continu.
 Conséquence : un instantané Btrfs du dossier `postgres/` n'est pas une sauvegarde fiable → utiliser `pg_dump` (section 5).
-Si `DATA_DIR` est sur carte SD, voir `docs/cadrage.md` (usure) : préférer un SSD.
+`DATA_DIR` ne doit pas pointer vers le disque système (carte SD : usure, voir `docs/cadrage.md`).
 
 ## 2. Valider les vrais flux AVANT de démarrer la collecte
 
@@ -79,9 +81,9 @@ Test de reprise après coupure : `docker compose stop worker` 10 min puis `start
 ## 5. Sauvegarde et restauration (manuelles pour l'instant)
 
 ```bash
-docker compose exec -T db pg_dump -U veille -d veille -Fc > /srv/veille/backup-$(date +%F).dump
+docker compose exec -T db pg_dump -U veille -d veille -Fc > "$DATA_DIR/backup-$(date +%F).dump"
 # restauration dans une base vide :
-docker compose exec -T db pg_restore -U veille -d veille --clean --if-exists < /srv/veille/backup-AAAA-MM-JJ.dump
+docker compose exec -T db pg_restore -U veille -d veille --clean --if-exists < "$DATA_DIR/backup-AAAA-MM-JJ.dump"
 ```
 Sauvegarder aussi `config/` et `.env` (hors Git). À planifier avec cron une fois l'emplacement choisi (question 5 du cadrage).
 
@@ -100,6 +102,8 @@ Retour arrière de schéma (après sauvegarde !) : `docker compose run --rm --en
 |---|---|
 | `init` en échec | `docker compose logs init` : mot de passe, droits sur `DATA_DIR/postgres` (uid 70) |
 | Source `failing` avec `HTTP 404` | URL supposée erronée : `discover-feeds`, corriger `config/sources.yaml`, `docker compose restart init worker` |
+| Source `blocked` « page de défi anti-robot détectée » | le site protège sa page (Gcore, Cloudflare…) : **ne pas contourner** ; chercher une autre source officielle ou laisser la source désactivée |
+| Source `domain_rejected` « redirection non sécurisée » | le site redirige vers http:// : corriger l'URL (souvent un « / » final en trop ou en moins) |
 | Source `blocked` « interdit par robots.txt » | respecter : ne pas contourner ; demander l'autorisation ou utiliser un flux officiel |
 | Source `blocked` « robots.txt injoignable » | réseau/DNS du Pi, ou 5xx temporaire du site (nouvel essai automatique) |
 | Source `rate_limited` | intervalle trop court : augmenter `poll_interval_s` |

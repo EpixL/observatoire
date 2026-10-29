@@ -5,6 +5,7 @@ import re
 
 from bs4 import BeautifulSoup
 
+from app.collectors.challenge import looks_like_challenge
 from app.collectors.base import ConditionalState, FetchedItem, FetchResult, outcome_from_http
 from app.collectors.http import PoliteClient
 from app.models import Source
@@ -37,6 +38,14 @@ def parse_page(body: bytes, url: str, selector: str | None) -> FetchedItem:
     )
 
 
+def challenge_result(r) -> FetchResult | None:
+    ch = looks_like_challenge(r.body)
+    if ch is None:
+        return None
+    return FetchResult(outcome="blocked", http_status=r.status, final_url=r.final_url, min_backoff_s=6 * 3600,
+                       error=f"page de défi anti-robot détectée ({ch}) : non contournée, source à remplacer ou à désactiver")
+
+
 class HtmlPageConnector:
     def fetch(self, source: Source, state: ConditionalState, http: PoliteClient) -> FetchResult:
         url = source.endpoint_url or source.canonical_url
@@ -46,8 +55,15 @@ class HtmlPageConnector:
         if r.kind != "ok":
             outcome, floor = outcome_from_http(r.status, r.kind)
             return FetchResult(outcome=outcome, http_status=r.status, final_url=r.final_url, error=r.error, retry_after_s=r.retry_after_s, min_backoff_s=floor)
+        blocked = challenge_result(r)
+        if blocked:
+            return blocked
         selector = source.options.get("content_selector")
         item = parse_page(r.body, r.final_url, selector)
+        marker = source.options.get("expected_marker")  # contrôle positif : la page contient-elle ce qu'on attend ?
+        if marker and not re.search(marker, item.text, re.I):
+            return FetchResult(outcome="error", http_status=r.status, final_url=r.final_url, min_backoff_s=1800,
+                               error=f"format inattendu : marqueur attendu absent ({marker!r})")
         if len(item.text) < 40:
             return FetchResult(outcome="error", http_status=r.status, final_url=r.final_url, error="page quasi vide (structure changée ou page d'erreur ?)", min_backoff_s=1800)
         # L'identité du document reste l'URL demandée (stable même si le site redirige).

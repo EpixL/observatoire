@@ -64,6 +64,9 @@ def ingest(session: Session, source: Source, result: FetchResult, now: datetime,
         chash, shash = content_hash(text), substantive_hash(text)
         doc = session.scalar(select(Document).where(Document.source_id == source.id, Document.external_id == item.external_id))
         pub = parse_publication_date(item.published_raw, default_tz=tz, reference=now)
+        if item.structured.get("is_update") and "old_publication" in pub.flags:
+            # La date fournie est celle de l'avis d'origine, pas celle de cette mise à jour : on le dit, sans la jeter.
+            pub.flags = [f for f in pub.flags if f != "old_publication"] + ["published_at_is_original_date"]
 
         if doc is None:
             kind, version_no = "initial", 1
@@ -84,6 +87,9 @@ def ingest(session: Session, source: Source, result: FetchResult, now: datetime,
             kind = "cosmetic" if (current is not None and (current.substantive_hash == shash or classify_change(current.text, text) == "cosmetic")) else "material"
             version_no = doc.version_count + 1
             doc.title = item.title or doc.title
+            if item.structured.get("is_update"):  # cette version est une mise à jour : la date du document reste celle de l'origine
+                doc.date_flags = [f for f in (doc.date_flags or []) if f != "old_publication"] + (
+                    ["published_at_is_original_date"] if "published_at_is_original_date" not in (doc.date_flags or []) else [])
             if doc.published_at is None and pub.value is not None:
                 doc.published_at, doc.published_at_raw, doc.date_flags = pub.value, pub.raw, list(pub.flags)
 

@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 import os
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.events import builder
@@ -28,7 +28,8 @@ def process_version(session: Session, version: DocumentVersion, gaz: Gazetteer, 
     source = session.get(Source, doc.source_id)
     prev = session.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id, DocumentVersion.version_no < version.version_no)
                           .order_by(DocumentVersion.version_no.desc()))
-    ctx = DocCtx(source=source, document=doc, version=version, prev_version=prev, gazetteer=gaz, now=now)
+    first = session.scalar(select(func.min(Document.first_seen_at)).where(Document.source_id == source.id))
+    ctx = DocCtx(source=source, document=doc, version=version, prev_version=prev, gazetteer=gaz, now=now, source_first_seen=first)
     extraction, prose_applicable = extract(ctx)
 
     wire = next((f.split(":", 1)[1] for f in extraction.flags if f.startswith("wire:")), None)

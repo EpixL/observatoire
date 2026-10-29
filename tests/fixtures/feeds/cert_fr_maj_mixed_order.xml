@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>CERT-FR - alertes (EXTRAIT: titres et dates réels du 29/10/2026, identifiants et résumés FICTIFS)</title>
+<link>https://cert.cyber.gouv.fr/alerte/</link><description>x</description>
+<item><title>Vulnérabilité dans Apple Mac OS X (24 juillet 2015)</title><link>https://cert.cyber.gouv.fr/alerte/CERTFR-2015-ALE-9001/</link><guid isPermaLink="false">CERTFR-2015-ALE-9001</guid><pubDate>Fri, 24 Jul 2015 10:00:00 +0200</pubDate><description>Résumé fictif ancien avis.</description></item>
+<item><title>[MàJ] Vulnérabilité dans Fortinet FortiOS (09 février 2024)</title><link>https://cert.cyber.gouv.fr/alerte/CERTFR-2024-ALE-9002/</link><guid isPermaLink="false">CERTFR-2024-ALE-9002</guid><pubDate>Fri, 09 Feb 2024 10:00:00 +0100</pubDate><description>Résumé fictif de la mise à jour.</description></item>
+<item><title>Vulnérabilité récente dans un produit fictif (28 octobre 2026)</title><link>https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-9003/</link><guid isPermaLink="false">CERTFR-2026-ALE-9003</guid><pubDate>Wed, 28 Oct 2026 08:00:00 +0100</pubDate><description>Résumé fictif récent.</description></item>
+</channel></rss>

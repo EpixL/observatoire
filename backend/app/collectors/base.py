@@ -59,7 +59,7 @@ class Connector(Protocol):
 
 def outcome_from_http(status: int | None, kind: str) -> tuple[str, int]:
     """Traduit un échec HTTP en (outcome, plancher de backoff en secondes)."""
-    if kind == "domain_rejected":
+    if kind in ("domain_rejected", "insecure_redirect"):
         return "domain_rejected", 6 * 3600
     if kind == "robots_blocked":
         return "blocked", 6 * 3600

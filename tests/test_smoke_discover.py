@@ -22,7 +22,7 @@ def test_smoke_reports_verdicts_without_database(settings, tmp_path):
 
     def handler(request: httpx.Request) -> httpx.Response:
         host = request.url.host
-        if host == "www.cert.ssi.gouv.fr":
+        if host == "cert.cyber.gouv.fr":
             return httpx.Response(200, headers={"content-type": "application/rss+xml", "etag": '"x"'}, content=fixture_bytes("feeds/cert_fr_alertes.xml"))
         if host == "api.ioda.inetintel.cc.gatech.edu":
             return httpx.Response(200, content=fixture_bytes("json/ioda_bad_schema.json"))

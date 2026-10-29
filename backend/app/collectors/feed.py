@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 import feedparser
 
+from app.collectors.challenge import looks_like_challenge
 from app.collectors.base import ConditionalState, FetchedItem, FetchResult, outcome_from_http
 from app.collectors.http import PoliteClient
 from app.models import Source
@@ -32,6 +34,8 @@ def parse_feed(body: bytes, base_url: str) -> list[FetchedItem] | None:
         if not ext:
             ext = "sha256:" + hashlib.sha256(f"{title}|{published}".encode()).hexdigest()
         text = "\n".join(part for part in (title, summary) if part)
+        # CERT-FR : les entrées « [MàJ] » portent la date d'ORIGINE de l'avis dans pubDate (observé sur le Pi, 29/10/2026).
+        is_update = bool(re.match(r"^\s*\[\s*m[àa]j\s*\]", title, re.I))
         items.append(
             FetchedItem(
                 external_id=str(ext),
@@ -43,6 +47,7 @@ def parse_feed(body: bytes, base_url: str) -> list[FetchedItem] | None:
                     "authors": [a.get("name") for a in entry.get("authors", []) if a.get("name")],
                     "tags": [t.get("term") for t in entry.get("tags", []) if t.get("term")],
                     "feed_title": parsed.feed.get("title"),
+                    "is_update": is_update,
                 },
             )
         )
@@ -65,6 +70,10 @@ class FeedConnector:
         if r.kind != "ok":
             outcome, floor = outcome_from_http(r.status, r.kind)
             return FetchResult(outcome=outcome, http_status=r.status, final_url=r.final_url, error=r.error, retry_after_s=r.retry_after_s, min_backoff_s=floor)
+        ch = looks_like_challenge(r.body)
+        if ch:
+            return FetchResult(outcome="blocked", http_status=r.status, final_url=r.final_url, min_backoff_s=6 * 3600,
+                               error=f"page de défi anti-robot détectée ({ch}) : non contournée")
         items = parse_feed(r.body, source.canonical_url)
         if items is None:
             return FetchResult(outcome="error", http_status=r.status, final_url=r.final_url, error="réponse non reconnue comme flux RSS/Atom", min_backoff_s=1800)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.events.gazetteer import Gazetteer
 from app.events.schemas import Precision
@@ -18,6 +18,12 @@ class DocCtx:
     prev_version: DocumentVersion | None
     gazetteer: Gazetteer
     now: datetime
+    source_first_seen: datetime | None = None  # 1re observation d'un document de CETTE source (fenêtre de base)
+
+    @property
+    def in_baseline(self) -> bool:
+        """Version acquise pendant le premier relevé de la source : arriéré connu, pas une nouveauté."""
+        return self.source_first_seen is not None and self.version.retrieved_at - self.source_first_seen <= timedelta(minutes=10)
 
 
 def fold(text: str) -> str:

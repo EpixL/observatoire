@@ -72,75 +72,51 @@ def extract_diplomatie(ctx: DocCtx) -> Extraction:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# EASA — Conflict Zone Information Bulletins
-CZIB = re.compile(r"czib[\s-]*(\d{4})-(\d{2,3})(?:\s*r(\d+))?")
-
-
-def _czib_rows(text: str, ctx: DocCtx) -> dict[str, dict]:
-    """Un bulletin = bloc de lignes depuis la ligne portant son identifiant jusqu'à l'identifiant suivant
-    (la structure réelle de la page est à confirmer sur le Pi : identifiant et description peuvent être sur des lignes distinctes)."""
-    marks = []
-    for a, b, line in _line_spans(text):
-        m = CZIB.search(fold(line))
-        if m:
-            marks.append((a, m))
-    rows: dict[str, dict] = {}
-    for i, (a, m) in enumerate(marks):
-        end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
-        block = text[a:min(end, a + 600)].rstrip()
-        f = fold(block)
-        cid = f"{m[1]}-{m[2]}"
-        until = None
-        mu = re.search(r"valid until (.+)", f)
-        if mu:
-            until, _, _ = parse_date_in(mu.group(1), None)
-        places = ctx.gazetteer.find(block)
-        rows[cid] = {"id": cid, "revision": int(m[3]) if m[3] else 0, "valid_until": until, "zones": ctx.gazetteer.codes(block),
-                     "place": places[0] if places else None, "a": a, "b": a + len(block), "line": block}
-    return rows
-
-
+# EASA — Conflict Zone Information Bulletins : un document par bulletin (champs fournis par le connecteur `easa_czib`)
 def extract_czib(ctx: DocCtx) -> Extraction:
     ex = Extraction()
-    cur = _czib_rows(ctx.version.text, ctx)
-    prev = _czib_rows(ctx.prev_version.text, ctx) if ctx.prev_version is not None else None
-    for cid, r in cur.items():
-        base = dict(
-            claim_type=ClaimType.declaration, statement=r["line"], place_text=r["place"].text if r["place"] else None,
-            zone_codes=r["zones"], declarant="EASA", declarant_kind=DeclarantKind.official, official_scope=OfficialScope.own_decision,
-            certainty=Certainty.structured, quote=r["line"], quote_start=r["a"], quote_end=r["b"],
-        )
-        vu = r["valid_until"].date().isoformat() if r["valid_until"] else None
-        params = {"czib_id": cid, "revision": r["revision"], "valid_until": vu}
-        ex.claims.append(ExtractedClaim(category=Category.airspace_advisory_state, params={**params, "change": "baseline"},
-                                        key_extra=f"{cid}|r{r['revision']}|{vu}", rule_id="czib.state", **base))
-        if prev is None:
-            continue
-        before = prev.get(cid)
-        if before is None:
+    s = ctx.version.structured or {}
+    cid = s.get("czib_id")
+    if not cid:
+        ex.flags.append("czib_fields_missing")
+        return ex
+    prev = (ctx.prev_version.structured or {}) if ctx.prev_version is not None else None
+    text = ctx.version.text
+    title = s.get("title") or ""
+    zones = ctx.gazetteer.codes(title)
+    places = ctx.gazetteer.find(title)
+    base = dict(
+        claim_type=ClaimType.declaration, statement=text.replace("\n", " — "), place_text=places[0].text if places else title or None,
+        zone_codes=zones, declarant="EASA", declarant_kind=DeclarantKind.official, official_scope=OfficialScope.own_decision,
+        certainty=Certainty.structured, quote=text, quote_start=0, quote_end=len(text),
+    )
+    params = {"czib_id": cid, "revision": s.get("revision", 0), "valid_until": s.get("valid_until"), "status": s.get("status"),
+              "issued": s.get("issued"), "revised": s.get("revised"), "url": s.get("url")}
+    key = f"{cid}|r{params['revision']}|{params['valid_until']}|{params['status']}"
+    ex.claims.append(ExtractedClaim(category=Category.airspace_advisory_state, params={**params, "change": "baseline"},
+                                    key_extra=key, rule_id="czib.state", **base))
+    if prev is None:
+        if not ctx.in_baseline:  # bulletin apparu APRÈS le premier relevé : vraie création
             ex.claims.append(ExtractedClaim(category=Category.airspace_advisory, params={**params, "change": "created"},
-                                            key_extra=f"{cid}|created|r{r['revision']}", rule_id="czib.created", **base))
-        elif r["revision"] > before["revision"]:
-            ex.claims.append(ExtractedClaim(category=Category.airspace_advisory,
-                                            params={**params, "change": "revised", "from_revision": before["revision"]},
-                                            key_extra=f"{cid}|revised|r{r['revision']}", rule_id="czib.revised", **base))
-        elif r["valid_until"] != before["valid_until"]:
-            # Prolongation de validité seule : pas un changement de risque (plan §3).
-            ex.claims.append(ExtractedClaim(category=Category.czib_validity_extended,
-                                            params={**params, "change": "validity_only", "extension_only": True,
-                                                    "from_valid_until": before["valid_until"].date().isoformat() if before["valid_until"] else None},
-                                            key_extra=f"{cid}|validity|{vu}", rule_id="czib.validity", **base))
-    if prev is not None:
-        for cid, r in prev.items():
-            if cid not in cur:
-                head = ctx.version.text.split("\n")[0]
-                ex.claims.append(ExtractedClaim(
-                    category=Category.czib_removed_from_list, claim_type=ClaimType.declaration,
-                    statement=f"CZIB {cid} n'apparaît plus dans la liste (ce n'est pas la preuve d'un retrait)",
-                    zone_codes=r["zones"], declarant="EASA", declarant_kind=DeclarantKind.official, official_scope=OfficialScope.none,
-                    certainty=Certainty.structured, needs_review=True, review_reasons=["absent_from_listing_not_proof_of_withdrawal"],
-                    params={"czib_id": cid, "change": "absent"}, quote=head, quote_start=0, quote_end=len(head),
-                    key_extra=f"{cid}|absent", rule_id="czib.absent"))
+                                            key_extra=f"{cid}|created|r{params['revision']}", rule_id="czib.created", **base))
+        return ex
+    if params["revision"] > prev.get("revision", 0):
+        ex.claims.append(ExtractedClaim(category=Category.airspace_advisory,
+                                        params={**params, "change": "revised", "from_revision": prev.get("revision", 0)},
+                                        key_extra=f"{cid}|revised|r{params['revision']}", rule_id="czib.revised", **base))
+    elif params["valid_until"] != prev.get("valid_until"):
+        # Prolongation de validité seule : pas un changement de risque (plan §3).
+        old, new_ = prev.get("valid_until"), params["valid_until"]
+        direction = "extended" if (old and new_ and new_ > old) else ("shortened" if old and new_ else "changed")
+        ex.claims.append(ExtractedClaim(category=Category.czib_validity_extended,
+                                        params={**params, "change": "validity_only", "extension_only": True,
+                                                "direction": direction, "from_valid_until": old},
+                                        key_extra=f"{cid}|validity|{new_}", rule_id="czib.validity", **base))
+    elif params["status"] != prev.get("status"):
+        ex.claims.append(ExtractedClaim(category=Category.airspace_advisory,
+                                        params={**params, "change": "status_changed", "from_status": prev.get("status")},
+                                        needs_review=True, review_reasons=["status_change_semantics_unconfirmed"],
+                                        key_extra=f"{cid}|status|{params['status']}", rule_id="czib.status", **base))
     return ex
 
 
@@ -195,7 +171,13 @@ def extract_cert(ctx: DocCtx) -> Extraction:
     ex = Extraction()
     text = ctx.version.text
     m = CERT_ID.search(text)
-    if m:
+    id_elsewhere = CERT_ID.search(f"{ctx.document.external_id} {ctx.document.canonical_url}")
+    if m is None and id_elsewhere is not None:  # l'identifiant est dans le lien/guid, pas dans le texte : citation = titre
+        title = (ctx.version.title or text.split("\n")[0])
+        ts = text.find(title)
+        quote, qs, qe = (title, ts, ts + len(title)) if ts >= 0 else (text.split("\n")[0], 0, len(text.split("\n")[0]))
+        params = {"cert_id": id_elsewhere.group(0), "kind": CERT_KIND[id_elsewhere.group(1)]}
+    elif m:
         a, b = m.span()
         line_end = text.find("\n", b)
         line_end = len(text) if line_end == -1 else line_end
@@ -211,6 +193,7 @@ def extract_cert(ctx: DocCtx) -> Extraction:
         else:
             qe = qs + len(quote)
         params = {"cert_id": None, "kind": "inconnu"}
+    params["is_update"] = bool((ctx.version.structured or {}).get("is_update"))
     params["cve_count"] = len(set(re.findall(r"CVE-\d{4}-\d{4,7}", text)))
     params["not_geopolitical_indicator"] = True  # le nombre de CVE / un score n'est pas un indicateur d'escalade (plan §3)
     ex.claims.append(ExtractedClaim(
@@ -218,6 +201,13 @@ def extract_cert(ctx: DocCtx) -> Extraction:
         declarant=ctx.source.organisation, declarant_kind=DeclarantKind.official, official_scope=OfficialScope.own_decision,
         certainty=Certainty.structured, params=params, quote=quote, quote_start=qs, quote_end=qe,
         key_extra=str(params["cert_id"] or quote), rule_id="cert.advisory"))
+    if ctx.prev_version is not None and ctx.version.change_kind == "material":
+        # Mise à jour d'un avis existant ([MàJ]) : nouvelle version du MÊME document, donc une affirmation de plus dans le même dossier.
+        ex.claims.append(ExtractedClaim(
+            category=Category.cyber_advisory, claim_type=ClaimType.declaration, statement=quote, place_text="France", zone_codes=["FR"],
+            declarant=ctx.source.organisation, declarant_kind=DeclarantKind.official, official_scope=OfficialScope.own_decision,
+            certainty=Certainty.structured, params={**params, "change": "updated"}, quote=quote, quote_start=qs, quote_end=qe,
+            key_extra=f"{params['cert_id'] or quote}|v{ctx.version.version_no}", rule_id="cert.updated"))
     return ex
 
 

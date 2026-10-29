@@ -12,10 +12,10 @@ from app.models import Claim
 from conftest import fixture_bytes, make_client
 from corpus_helpers import claims, events, process
 
-DIPLO = "https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/"
+DIPLO = "https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs"
 EASA = "https://www.easa.europa.eu/en/domains/air-operations/czibs"
 VIGI = "https://www.sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate"
-CERT = "https://www.cert.ssi.gouv.fr/alerte/feed/"
+CERT = "https://cert.cyber.gouv.fr/alerte/feed/"
 HTML = {"content-type": "text/html"}
 
 
@@ -64,52 +64,51 @@ def test_mise_a_jour_de_date_seule_ne_produit_aucun_changement(sources, settings
     assert out["skipped_cosmetic"] == 1 and claims(sources, category="travel_advice_change") == [] and events(sources) == []
 
 
-def test_czib_nouveau_bulletin_et_prolongation_de_validite_distingues(sources, settings, clock, rng):
-    state = {"body": fixture_bytes("pages/easa_czib_list_v1.html")}
+def _easa(sources, settings, clock, rng, state):
+    return collect_and_process(sources, settings, clock, rng, "easa-czib", page_server(state))
+
+
+def test_czib_premier_releve_est_une_base_puis_nouveau_bulletin_et_prolongation_distingues(sources, settings, clock, rng):
+    state = {"body": fixture_bytes("pages/easa_real_rows.html")}
     http = page_server(state)
     collect_and_process(sources, settings, clock, rng, "easa-czib", http)
     base = claims(sources)
-    assert {c.category for c in base} == {"airspace_advisory_state"} and len(base) == 2 and events(sources) == []
-    assert {c.params["czib_id"]: c.params["revision"] for c in base} == {"2026-01": 2, "2026-03": 0}
+    assert {c.category for c in base} == {"airspace_advisory_state"} and len(base) == 2 and events(sources) == []   # arriéré = base
+    mali = next(c for c in base if c.params["czib_id"] == "2017-01")
+    assert mali.zone_codes == ["ML"] and mali.params["revision"] == 21 and mali.params["valid_until"] == "2027-04-30"
 
-    clock.advance(minutes=20)
-    state["body"] = fixture_bytes("pages/easa_czib_list_v2_new.html")
+    clock.advance(minutes=30)   # hors de la fenêtre de base : un bulletin apparu maintenant est une vraie création
+    new_row = fixture_bytes("pages/easa_real_rows.html").replace(b"</tbody>", b"""<tr><td class="views-field views-field-field-easa-conflict-zone-up-date">29/10/2026</td>
+<td class="views-field views-field-field-easa-conflict-zone-revdate">29/10/2026</td><td class="views-field views-field-field-easa-conflict-zone-until">29/04/2027</td>
+<td><div class="cz-title">Airspace of Fictivia</div><div class="czib_number">CZIB-2026-09</div><div class="cz-status">Active</div><a href="/en/domains/air-operations/czibs/czib-2026-09">d</a></td></tr></tbody>""")
+    state["body"] = new_row
     collect_and_process(sources, settings, clock, rng, "easa-czib", http)
     created = claims(sources, category="airspace_advisory")
-    assert len(created) == 1 and created[0].params["czib_id"] == "2026-04" and created[0].params["change"] == "created"
+    assert len(created) == 1 and created[0].params["czib_id"] == "2026-09" and created[0].params["change"] == "created"
 
-    clock.advance(minutes=20)
-    state["body"] = fixture_bytes("pages/easa_czib_list_v2_new.html").replace(b"Valid until 15 Nov 2026", b"Valid until 15 Feb 2027")
+    clock.advance(minutes=30)
+    state["body"] = new_row.replace(b"30/04/2027", b"31/10/2027")      # même révision R21, validité repoussée
     collect_and_process(sources, settings, clock, rng, "easa-czib", http)
     ext = claims(sources, category="czib_validity_extended")
-    assert len(ext) == 1 and ext[0].params["extension_only"] is True and ext[0].params["valid_until"] == "2027-02-15"
-    types = sorted(e.event_type for e in events(sources))
-    assert types == ["airspace_advisory", "airspace_advisory_extension"]   # prolongation ≠ changement de risque
+    assert len(ext) == 1 and ext[0].params["extension_only"] and ext[0].params["direction"] == "extended" and ext[0].params["valid_until"] == "2027-10-31"
+    assert sorted(e.event_type for e in events(sources)) == ["airspace_advisory", "airspace_advisory_extension"]   # prolongation ≠ risque
     with session_scope(sources) as s:
         assert verify_all(s)["bad"] == 0
 
 
-def test_czib_revision_est_un_changement_de_fond(sources, settings, clock, rng):
-    state = {"body": fixture_bytes("pages/easa_czib_list_v1.html")}
+def test_czib_nouvelle_revision_est_un_changement_de_fond(sources, settings, clock, rng):
+    state = {"body": fixture_bytes("pages/easa_real_rows.html")}
     http = page_server(state)
     collect_and_process(sources, settings, clock, rng, "easa-czib", http)
-    clock.advance(minutes=20)
-    state["body"] = fixture_bytes("pages/easa_czib_list_v1.html").replace(b"CZIB 2026-01R2", b"CZIB 2026-01R3")
+    clock.advance(minutes=30)
+    state["body"] = fixture_bytes("pages/easa_real_rows.html").replace(b"CZIB-2017-01R21", b"CZIB-2017-01R22").replace(b"30/09/2026", b"29/10/2026")
     collect_and_process(sources, settings, clock, rng, "easa-czib", http)
     rev = claims(sources, category="airspace_advisory")
-    assert len(rev) == 1 and rev[0].params["change"] == "revised" and rev[0].params["from_revision"] == 2
-
-
-def test_czib_absent_de_la_liste_n_est_pas_un_retrait(sources, settings, clock, rng):
-    state = {"body": fixture_bytes("pages/easa_czib_list_v1.html")}
-    http = page_server(state)
-    collect_and_process(sources, settings, clock, rng, "easa-czib", http)
-    clock.advance(minutes=20)
-    state["body"] = fixture_bytes("pages/easa_czib_list_v1.html").replace(b"<tr><td>CZIB 2026-03</td><td>Testistan - Valid until 15 Nov 2026</td></tr>", b"")
-    collect_and_process(sources, settings, clock, rng, "easa-czib", http)
-    gone = claims(sources, category="czib_removed_from_list")
-    assert len(gone) == 1 and gone[0].needs_review and "not_proof_of_withdrawal" in gone[0].review_reasons[0]
-    assert events(sources) == []
+    assert len(rev) == 1 and rev[0].params["change"] == "revised" and (rev[0].params["from_revision"], rev[0].params["revision"]) == (21, 22)
+    with session_scope(sources) as s:
+        from app.models import Document
+        d = next(x for x in s.scalars(select(Document)) if x.external_id == "czib-2017-01")
+        assert d.version_count == 2          # une nouvelle révision = nouvelle version matérielle du même bulletin
 
 
 def test_vigipirate_changement_de_posture(sources, settings, clock, rng):
@@ -160,3 +159,34 @@ def test_retraitement_est_idempotent(sources, settings, clock, rng):
 def test_aucun_historique_fictif_sans_collecte(sources):
     out = process(sources)
     assert out["processed"] == 0 and claims(sources) == [] and events(sources) == []
+
+
+def test_cert_arriere_ancien_et_maj_du_premier_releve_ne_sont_pas_des_nouveautes(sources, settings, clock, rng):
+    http = make_client(lambda r: httpx.Response(200, headers={"content-type": "application/rss+xml"}, content=fixture_bytes("feeds/cert_fr_maj_mixed_order.xml")))
+    collect_and_process(sources, settings, clock, rng, "cert-fr-alertes", http)
+    by_id = {c.params["cert_id"]: c for c in claims(sources, category="cyber_advisory")}
+    assert by_id["CERTFR-2015-ALE-9001"].stale                              # avis de 2015 : arriéré
+    assert by_id["CERTFR-2024-ALE-9002"].stale and "update_date_unknown_in_baseline_backlog" in by_id["CERTFR-2024-ALE-9002"].review_reasons
+    assert not by_id["CERTFR-2026-ALE-9003"].stale                          # vraiment récent : nouveauté
+    active = [e for e in events(sources) if e.status != "historical"]
+    assert len(active) == 1 and active[0].novelty == "new"                   # l'ordre du flux n'a aucune importance
+
+
+def test_cert_maj_apres_le_premier_releve_est_une_nouvelle_version_datee_de_maintenant(sources, settings, clock, rng):
+    base = fixture_bytes("feeds/cert_fr_maj_mixed_order.xml")
+    plain = base.replace("[MàJ] ".encode(), b"")
+    state = {"body": plain}
+    http = make_client(lambda r: httpx.Response(200, headers={"content-type": "application/rss+xml"}, content=state["body"]))
+    collect_and_process(sources, settings, clock, rng, "cert-fr-alertes", http)
+    clock.advance(hours=3)
+    state["body"] = base                         # l'avis 2024 réapparaît avec « [MàJ] », pubDate = date d'origine
+    collect_and_process(sources, settings, clock, rng, "cert-fr-alertes", http)
+    with session_scope(sources) as s:
+        from app.models import Document
+        d = next(x for x in s.scalars(select(Document)) if x.external_id == "CERTFR-2024-ALE-9002")
+        assert d.version_count == 2 and "published_at_is_original_date" in d.date_flags and "old_publication" not in d.date_flags
+        assert [v.change_kind for v in d.versions] == ["initial", "material"]
+    upd = [c for c in claims(sources, category="cyber_advisory") if c.params.get("change") == "updated"]
+    assert len(upd) == 1 and not upd[0].stale
+    ev = next(e for e in events(sources) if e.id and e.status != "historical" and e.ref_at == clock.now)
+    assert ev.ref_at.year == 2026             # datée de la mise à jour observée, pas de 2024

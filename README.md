@@ -19,4 +19,4 @@ python3 -m venv .venv && . .venv/bin/activate && pip install -r backend/requirem
 eval "$(scripts/dev-postgres.sh start)"     # PostgreSQL jetable local (hors Docker)
 pytest
 ```
-Les tests utilisent un vrai PostgreSQL et un faux serveur HTTP : aucun accès Internet. Les fixtures sont **fictives** (`tests/fixtures/README.md`).
+Les tests utilisent un vrai PostgreSQL et un faux serveur HTTP : aucun accès Internet. Les fixtures sont **fictives**, sauf quelques extraits réels relevés sur le Pi, listés dans `tests/fixtures/README.md`.

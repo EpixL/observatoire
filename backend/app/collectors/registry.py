@@ -24,7 +24,7 @@ class SourceConfig(BaseModel):
     zone: str
     competence: str = ""
     languages: list[str] = []
-    connector: Literal["feed", "html_page", "ioda"]
+    connector: Literal["feed", "html_page", "ioda", "easa_czib"]
     access_mode: Literal["feed", "html_page", "json_api"]
     canonical_url: str
     endpoint_url: str | None = None
@@ -34,7 +34,7 @@ class SourceConfig(BaseModel):
     quota_note: str = ""
     retention_days: int = 90
     auth_required: bool = False
-    verification_status: Literal["unverified_blocked", "verified", "to_discover"] = "unverified_blocked"
+    verification_status: Literal["unverified_blocked", "partially_verified", "verified", "blocked_by_site", "to_discover"] = "unverified_blocked"
     priority: str = "V1"
     enabled: bool = True
     options: dict[str, Any] = {}

@@ -42,9 +42,9 @@
 | Famille | Mode | Produit |
 |---|---|---|
 | France Diplomatie (page) | niveaux de conseil à vocabulaire fixe | `travel_advice_state` / `travel_advice_change` (hausse, baisse, ajout, départ recommandé) |
-| EASA CZIB | blocs « CZIB AAAA-NN[Rn] … Valid until … » | `airspace_advisory_state`, `airspace_advisory` (créé / révisé), `czib_validity_extended`, `czib_removed_from_list` (à vérifier : absence ≠ retrait) |
+| EASA CZIB | un document par bulletin (champs du tableau réel : numéro, révision, zone, dates JJ/MM/AAAA, validité, statut) | `airspace_advisory_state` (base), `airspace_advisory` (créé après le 1er relevé / nouvelle révision / changement de statut), `czib_validity_extended` (prolongation seule). La disparition d'un bulletin de la liste n'est plus détectée (à reprendre). |
 | Vigipirate | « Posture en cours : … » | `security_posture_state` / `security_posture_change` |
-| CERT-FR | identifiants `CERTFR-…` | `cyber_advisory` (jamais un indicateur géopolitique ; le nombre de CVE est purement informatif) |
+| CERT-FR | identifiants `CERTFR-…` (texte, guid ou lien) | `cyber_advisory` (jamais un indicateur géopolitique ; le nombre de CVE est purement informatif). Les entrées « [MàJ] » sont des **mises à jour** : nouvelle version du même avis, date d'origine conservée mais marquée (`published_at_is_original_date`), observation datée de la mise à jour ; vues au tout premier relevé, elles sont de l'arriéré. Les avis de plus de 7 jours au premier relevé sont écartés comme arriéré (`historical`). |
 | IODA | JSON structuré | `internet_outage` (observation d'un capteur ; ne prouve pas une cyberattaque) |
 | Médias / flux d'actualité | **prose conservatrice** (FR/EN) | `closure_restriction`, `outage_reported`, `weather_event`, `attack_alleged`, `sabotage_alleged`, `threat_statement`, `military_exercise`, `attribution_statement`, `nuclear_radiological_mention` |
 

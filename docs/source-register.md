@@ -8,27 +8,30 @@ Les champs dynamiques du plan (dernier succès, dernière nouveauté, état du c
 
 | Statut | Signification |
 |---|---|
-| **BLOQUÉ cloud — à vérifier sur le Pi** | Endpoint appelé une fois depuis l'environnement cloud le 29/10/2026 : refusé par le proxy sortant (`ProxyError: 403`). Le collecteur est testé sur des **fixtures fictives** uniquement. Aucun succès n'est simulé. |
-| **URL supposée** | En plus : l'URL elle-même est une hypothèse de ma part (non confirmée). |
-| **À découvrir** | URL du flux inconnue ; source désactivée. |
+| `verified` | endpoint appelé avec succès **et** format compris, preuve datée (smoke réel sur le Pi, `options.verified_on`) |
+| `partially_verified` | joignable depuis le Pi, mais format ou contenu pas entièrement confirmé |
+| `unverified_blocked` | pas encore validé sur le Pi (URL à retester) |
+| `blocked_by_site` | le site refuse notre accès honnête (403, page anti-robot) : **source désactivée, motif écrit, aucun contournement** |
+| `to_discover` | URL du flux inconnue ; source désactivée |
 
-**Aucune source n'est marquée « verified ».** Un test automatique (`test_every_enabled_source_is_marked_unverified_in_cloud`)
-interdit de le faire sans preuve.
+Preuves : le 29/10/2026 depuis le cloud, tout était refusé par le proxy (`docs/smoke-cloud-2026-10-29.json`) ; le même jour à 17:08 UTC,
+**smoke réel sur le Pi** (lancé par David via la session homelab : venv Python 3.13.5, NTP synchronisé, DNS OK). Un test automatique
+impose qu'une source `verified`/`partially_verified` porte sa date de preuve, et qu'une source `blocked_by_site` soit désactivée avec son motif.
 
-## Sources implémentées (8 actives, 2 désactivées)
+## Sources implémentées (6 actives, 4 désactivées)
 
-| id | Organisme / type | Mode | Endpoint configuré | Cadence configurée (plan) | Famille d'origine | Statut |
+| id | Organisme / type | Mode | Endpoint | Cadence | Résultat du smoke réel (Pi, 29/10/2026) | Statut |
 |---|---|---|---|---|---|---|
-| `france-diplomatie-cv` | MEAE — autorité | page HTML | `diplomatie.gouv.fr/fr/conseils-aux-voyageurs/` (URL de la page citée dans le plan) | 15 min (pages 10–15) | fr-diplomatie | BLOQUÉ cloud (robots.txt injoignable) — à vérifier sur le Pi |
-| `france-diplomatie-rss` | MEAE — autorité | RSS | `diplomatie.gouv.fr/spip.php?page=backend&lang=fr` | 5 min (RSS 2–5 si permis) | fr-diplomatie | BLOQUÉ cloud — **URL supposée** : flux général, pas forcément celui des conseils par pays → `discover-feeds` |
-| `easa-czib` | EASA — autorité | page HTML | `easa.europa.eu/en/domains/air-operations/czibs` (URL du plan) | 10 min | easa | BLOQUÉ cloud — à vérifier ; flux RSS/JSON annoncés par EASA à identifier |
-| `ioda-fr` | Georgia Tech IODA — mesure | API JSON v2 | `api.ioda.inetintel.cc.gatech.edu/v2/outages/events?entityType=country&entityCode=FR…` | 10 min (5–10) | ioda | BLOQUÉ cloud — **schéma de réponse reconstruit de mémoire**, à confirmer ; quotas inconnus |
-| `cert-fr-alertes` | CERT-FR (ANSSI) — autorité | RSS | `www.cert.ssi.gouv.fr/alerte/feed/` | 15 min | cert-fr | BLOQUÉ cloud — **URL supposée** (le plan cite la page `cert.cyber.gouv.fr/flux-rss` ; l'ancien domaine redirige peut-être) |
-| `cert-fr-actualite` | CERT-FR — autorité | RSS | `www.cert.ssi.gouv.fr/actualite/feed/` | 15 min | cert-fr | idem |
-| `sgdsn-vigipirate` | SGDSN — autorité | page HTML | `sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate` | 15 min | sgdsn | BLOQUÉ cloud — **URL supposée** (page exacte du niveau Vigipirate à confirmer) |
-| `france24-fr` | France Médias Monde — média | RSS | `france24.com/fr/rss` | 10 min | media-france24 | BLOQUÉ cloud — **URL supposée**. Titres/résumés du flux uniquement, aucun contournement de paywall |
-| `nato-news` | OTAN — autorité | RSS | *(inconnue)* | 10 min | nato | **À découvrir**, désactivée |
-| `eeas-presse` | UE / SEAE — autorité | RSS | *(inconnue)* | 10 min | eeas | **À découvrir**, désactivée |
+| `france-diplomatie-cv` | MEAE — autorité | page HTML | `https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs` **(sans « / » final)** | 15 min | avec « / » : 301 vers `http://` (port 80 fermé) → ConnectError. **URL corrigée** ; redirection https→http désormais une erreur explicite ; marqueur de contenu attendu ; à **relancer** | `unverified_blocked` (à retester) |
+| `france-diplomatie-rss` | MEAE — autorité | RSS | `…/spip.php?page=backend&lang=fr` | 5 min | **403** avec notre User-Agent honnête | `blocked_by_site` — **désactivée** ; chercher le flux officiellement documenté (FAQ voyage) |
+| `easa-czib` | EASA — autorité | tableau HTML, 1 document par CZIB | `https://www.easa.europa.eu/en/domains/air-operations/czibs` | 10 min | 200, ETag et Last-Modified supportés ; structure d'une ligne relevée | `partially_verified` — parseur réécrit sur la structure réelle ; pagination et page entière à confirmer |
+| `ioda-fr` | Georgia Tech IODA — mesure | API JSON v2 | `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/events?…` | 10 min | 200, enveloppe confirmée (France : `data: []`, `format: codf`) | `partially_verified` — **forme d'un événement non confirmée** (aucun événement observé) ; copyright Georgia Tech noté |
+| `cert-fr-alertes` | CERT-FR (ANSSI) — autorité | RSS | `https://cert.cyber.gouv.fr/alerte/feed/` | 15 min | 200, 40 entrées, ETag/Last-Modified ; ordre **non chronologique** ; entrées « [MàJ] » datées de l'origine | `verified` |
+| `cert-fr-actualite` | CERT-FR — autorité | RSS | `https://cert.cyber.gouv.fr/actualite/feed/` | 15 min | 200, 40 entrées | `verified` |
+| `sgdsn-vigipirate` | SGDSN — autorité | page HTML | `…/vigipirate` (URL supposée) | 15 min | 200 mais **page anti-robot Gcore** prise à tort pour un succès (**corrigé**) | `blocked_by_site` — **désactivée** ; chercher une source officielle alternative du niveau Vigipirate |
+| `france24-fr` | France Médias Monde — média | RSS | `https://www.france24.com/fr/rss` | 10 min | 200, 24 entrées | `verified` |
+| `nato-news` | OTAN — autorité | RSS | *(inconnue)* | — | non testée | `to_discover`, désactivée |
+| `eeas-presse` | UE / SEAE — autorité | RSS | *(inconnue)* | — | non testée | `to_discover`, désactivée |
 
 Cadences : volontairement prudentes. Resserrer vers 2–5 min seulement après lecture des conditions d'utilisation et
 mesure sur le Pi (question 8 du cadrage). Chaque requête : User-Agent identifié, requête conditionnelle (ETag /

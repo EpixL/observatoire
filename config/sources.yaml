@@ -3,7 +3,10 @@
 # verification_status :
 #   unverified_blocked  endpoint jamais atteint depuis l'environnement cloud (réseau filtré) :
 #                       collecteur testé sur fixtures uniquement -> « à vérifier sur le Pi »
-#   verified            endpoint appelé avec succès (mettre à jour après scripts/smoke-collectors.sh)
+#   partially_verified  endpoint joignable depuis le Pi (smoke réel du 29/10/2026) mais format/contenu pas entièrement confirmé
+#   verified            endpoint appelé avec succès ET format compris (preuve : smoke réel sur le Pi, options.verified_on)
+#   blocked_by_site     le site refuse notre accès honnête (403, page anti-robot) : AUCUN contournement ; source désactivée
+#                       avec son motif dans options.disabled_reason, en attente d'une source officielle alternative
 #   to_discover         URL du flux inconnue ; utiliser `python -m app.cli discover-feeds`
 #
 # Cadences = poll_interval_s : volontairement prudentes (plan : RSS 2-5 min SI PERMIS ; pages 10-15 min).
@@ -25,8 +28,9 @@ sources:
     languages: [fr]
     connector: html_page
     access_mode: html_page
-    canonical_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/
-    endpoint_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/
+    canonical_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs
+    # SANS "/" final : avec "/", le site répond 301 vers http:// (port 80 fermé) — constaté sur le Pi le 29/10/2026.
+    endpoint_url: https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs
     allowed_domains: [diplomatie.gouv.fr]
     poll_interval_s: 900
     licence: "Licence Ouverte Etalab 2.0 (à confirmer pour ce contenu)"
@@ -34,6 +38,7 @@ sources:
     verification_status: unverified_blocked
     options:
       content_selector: "main"
+      expected_marker: "conseils aux voyageurs"   # contrôle positif : sinon « format inattendu »
 
   - id: france-diplomatie-rss
     name: France Diplomatie — flux RSS
@@ -51,9 +56,12 @@ sources:
     endpoint_url: https://www.diplomatie.gouv.fr/spip.php?page=backend&lang=fr
     allowed_domains: [diplomatie.gouv.fr]
     poll_interval_s: 300
+    enabled: false
     licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
     quota_note: "Aucun quota publié."
-    verification_status: unverified_blocked
+    verification_status: blocked_by_site
+    options:
+      disabled_reason: "HTTP 403 avec notre User-Agent honnête (smoke Pi 29/10/2026). Pas de contournement. Chercher le flux RSS officiellement documenté (FAQ voyage du site) ou garder la page conseils-aux-voyageurs comme voie principale."
 
   - id: easa-czib
     name: EASA — Conflict Zone Information Bulletins (liste)
@@ -63,17 +71,17 @@ sources:
     zone: monde
     competence: Restrictions et recommandations aériennes dans les zones de conflit
     languages: [en]
-    connector: html_page
+    connector: easa_czib      # un document par bulletin (tableau HTML)
     access_mode: html_page
     canonical_url: https://www.easa.europa.eu/en/domains/air-operations/czibs
     endpoint_url: https://www.easa.europa.eu/en/domains/air-operations/czibs
     allowed_domains: [easa.europa.eu]
     poll_interval_s: 600
     licence: "Réutilisation EASA : voir conditions du site (à vérifier)."
-    quota_note: "Des flux RSS/JSON/CSV existent d'après la page EASA ; URL exacte à découvrir (discover-feeds)."
-    verification_status: unverified_blocked
+    quota_note: "Des flux RSS/JSON/CSV existent d'après la page EASA ; URL exacte à découvrir (discover-feeds). Pagination de la liste non vérifiée."
+    verification_status: partially_verified   # page 200 + structure du tableau relevée sur le Pi ; reste à confirmer sur la page entière
     options:
-      content_selector: "main"
+      verified_on: "2026-10-29"
 
   - id: ioda-fr
     name: IODA — interruptions Internet, France
@@ -89,10 +97,11 @@ sources:
     endpoint_url: https://api.ioda.inetintel.cc.gatech.edu/v2
     allowed_domains: [api.ioda.inetintel.cc.gatech.edu, ioda.inetintel.cc.gatech.edu]
     poll_interval_s: 600
-    licence: "Données de recherche ; conditions d'usage de l'API à confirmer."
+    licence: "Copyright (c) 2021-2025 Georgia Tech Research Corporation — All Rights Reserved (mention renvoyée par l'API). Conditions d'usage, conservation et redistribution à vérifier avant toute exploitation au-delà de l'usage privé."
     quota_note: "Limites d'API non documentées ici : 429 géré comme état technique."
-    verification_status: unverified_blocked
+    verification_status: partially_verified   # enveloppe de réponse confirmée (réponse réelle France : data=[]) ; forme d'un événement NON confirmée
     options:
+      verified_on: "2026-10-29"
       lookback_hours: 48
       entities:
         - {type: country, code: FR}
@@ -108,13 +117,15 @@ sources:
     connector: feed
     access_mode: feed
     canonical_url: https://cert.cyber.gouv.fr/flux-rss
-    endpoint_url: https://www.cert.ssi.gouv.fr/alerte/feed/
+    endpoint_url: https://cert.cyber.gouv.fr/alerte/feed/
     allowed_domains: [cert.ssi.gouv.fr, cert.cyber.gouv.fr, ssi.gouv.fr, cyber.gouv.fr]
     poll_interval_s: 900
     priority: V1 facultative
     licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
-    quota_note: "Aucun quota publié. L'ancien domaine peut rediriger vers cert.cyber.gouv.fr."
-    verification_status: unverified_blocked
+    quota_note: "Aucun quota publié. 40 entrées par flux, ordre NON chronologique ; les entrées « [MàJ] » portent la date d'origine."
+    verification_status: verified
+    options:
+      verified_on: "2026-10-29"
 
   - id: cert-fr-actualite
     name: CERT-FR — actualités
@@ -127,13 +138,15 @@ sources:
     connector: feed
     access_mode: feed
     canonical_url: https://cert.cyber.gouv.fr/flux-rss
-    endpoint_url: https://www.cert.ssi.gouv.fr/actualite/feed/
+    endpoint_url: https://cert.cyber.gouv.fr/actualite/feed/
     allowed_domains: [cert.ssi.gouv.fr, cert.cyber.gouv.fr, ssi.gouv.fr, cyber.gouv.fr]
     poll_interval_s: 900
     priority: V1 facultative
     licence: "Licence Ouverte Etalab 2.0 (à confirmer)"
     quota_note: "Aucun quota publié."
-    verification_status: unverified_blocked
+    verification_status: verified
+    options:
+      verified_on: "2026-10-29"
 
   - id: sgdsn-vigipirate
     name: Vigipirate — posture en cours (SGDSN)
@@ -146,15 +159,18 @@ sources:
     connector: html_page
     access_mode: html_page
     canonical_url: https://www.sgdsn.gouv.fr/
-    # URL SUPPOSÉE : la page exacte du niveau Vigipirate doit être confirmée sur le Pi.
+    # URL supposée ; de toute façon le site sert une page anti-robot (Gcore « Browser Validation Page »).
     endpoint_url: https://www.sgdsn.gouv.fr/nos-missions/proteger-la-population/vigipirate
     allowed_domains: [sgdsn.gouv.fr]
     poll_interval_s: 900
+    enabled: false
     licence: "À confirmer"
     quota_note: "Aucun quota publié."
-    verification_status: unverified_blocked
+    verification_status: blocked_by_site
     options:
       content_selector: "main"
+      expected_marker: "vigipirate"
+      disabled_reason: "Réponse 200 = page de défi anti-robot Gcore (smoke Pi 29/10/2026). Pas de contournement (ni UA de navigateur, ni JavaScript, ni cookies). À chercher : source officielle alternative du niveau Vigipirate (data.gouv.fr, flux, page non protégée)."
 
   - id: france24-fr
     name: France 24 — flux d'actualité (FR)
@@ -172,7 +188,9 @@ sources:
     poll_interval_s: 600
     licence: "Usage du flux RSS selon conditions du site : titres et liens uniquement."
     quota_note: "Aucun quota publié."
-    verification_status: unverified_blocked
+    verification_status: verified      # 24 entrées lues sur le Pi le 29/10/2026
+    options:
+      verified_on: "2026-10-29"
 
   - id: nato-news
     name: OTAN — actualités et communiqués

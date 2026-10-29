@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from urllib import robotparser
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -24,7 +24,7 @@ class HttpResult:
     last_modified: str | None
     retry_after_s: int | None
     error: str | None = None
-    kind: str = "ok"  # ok | not_modified | http_error | network_error | domain_rejected | robots_blocked | too_large
+    kind: str = "ok"  # ok | not_modified | http_error | network_error | domain_rejected | insecure_redirect | robots_blocked | too_large
 
 
 def _parse_retry_after(value: str | None) -> int | None:
@@ -52,8 +52,7 @@ class PoliteClient:
         self._client = httpx.Client(
             headers={"User-Agent": user_agent, "Accept": "application/rss+xml, application/atom+xml, application/json, text/html;q=0.8, */*;q=0.5"},
             timeout=timeout_s,
-            follow_redirects=True,
-            max_redirects=5,
+            follow_redirects=False,  # redirections suivies à la main : on contrôle chaque saut (HTTPS, liste blanche)
             transport=transport,
         )
         self._user_agent = user_agent
@@ -85,7 +84,7 @@ class PoliteClient:
             parser: robotparser.RobotFileParser | None
             try:
                 self._throttle(parts.netloc)
-                r = self._client.get(f"{origin}/robots.txt")
+                r = self._client.get(f"{origin}/robots.txt", follow_redirects=True)
                 if r.status_code >= 500:
                     parser = None
                 else:
@@ -125,31 +124,42 @@ class PoliteClient:
             headers["If-None-Match"] = etag
         if last_modified:
             headers["If-Modified-Since"] = last_modified
-        self._throttle(urlsplit(url).netloc)
-        try:
-            with self._client.stream("GET", url, headers=headers) as r:
-                final_url = str(r.url)
-                if not host_allowed(final_url, allowed_domains):
-                    return HttpResult(r.status_code, final_url, b"", "", None, None, None, f"redirection hors liste blanche : {final_url}", "domain_rejected")
-                chunks: list[bytes] = []
-                size = 0
-                for chunk in r.iter_bytes():
-                    size += len(chunk)
-                    if size > self._max:
-                        return HttpResult(r.status_code, final_url, b"", "", None, None, None, f"corps > {self._max} octets", "too_large")
-                    chunks.append(chunk)
-                body = b"".join(chunks)
-                common = dict(
-                    final_url=final_url,
-                    content_type=r.headers.get("content-type", ""),
-                    etag=r.headers.get("etag"),
-                    last_modified=r.headers.get("last-modified"),
-                    retry_after_s=_parse_retry_after(r.headers.get("retry-after")),
-                )
-                if r.status_code == 304:
-                    return HttpResult(304, body=b"", kind="not_modified", **common)
-                if r.status_code >= 400:
-                    return HttpResult(r.status_code, body=b"", error=f"HTTP {r.status_code}", kind="http_error", **common)
-                return HttpResult(r.status_code, body=body, **common)
-        except httpx.HTTPError as exc:
-            return HttpResult(None, url, b"", "", None, None, None, f"{type(exc).__name__}: {exc}"[:300], "network_error")
+        current = url
+        for _hop in range(6):
+            self._throttle(urlsplit(current).netloc)
+            try:
+                with self._client.stream("GET", current, headers=headers) as r:
+                    if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+                        target = urljoin(current, r.headers["location"])
+                        if not target.startswith("https://"):
+                            # ex. https -> http : le port 80 est souvent fermé ; on le dit clairement plutôt qu'un ConnectError opaque
+                            return HttpResult(r.status_code, target, b"", "", None, None, None,
+                                              f"redirection non sécurisée (HTTP {r.status_code} vers {target}) : refusée, HTTPS uniquement", "insecure_redirect")
+                        if not host_allowed(target, allowed_domains):
+                            return HttpResult(r.status_code, target, b"", "", None, None, None, f"redirection hors liste blanche : {target}", "domain_rejected")
+                        current = target
+                        continue
+                    final_url = current
+                    chunks: list[bytes] = []
+                    size = 0
+                    for chunk in r.iter_bytes():
+                        size += len(chunk)
+                        if size > self._max:
+                            return HttpResult(r.status_code, final_url, b"", "", None, None, None, f"corps > {self._max} octets", "too_large")
+                        chunks.append(chunk)
+                    body = b"".join(chunks)
+                    common = dict(
+                        final_url=final_url,
+                        content_type=r.headers.get("content-type", ""),
+                        etag=r.headers.get("etag"),
+                        last_modified=r.headers.get("last-modified"),
+                        retry_after_s=_parse_retry_after(r.headers.get("retry-after")),
+                    )
+                    if r.status_code == 304:
+                        return HttpResult(304, body=b"", kind="not_modified", **common)
+                    if r.status_code >= 400:
+                        return HttpResult(r.status_code, body=b"", error=f"HTTP {r.status_code}", kind="http_error", **common)
+                    return HttpResult(r.status_code, body=body, **common)
+            except httpx.HTTPError as exc:
+                return HttpResult(None, current, b"", "", None, None, None, f"{type(exc).__name__}: {exc}"[:300], "network_error")
+        return HttpResult(None, current, b"", "", None, None, None, "trop de redirections", "network_error")
