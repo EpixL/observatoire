@@ -124,6 +124,17 @@ def run_due(factory: sessionmaker[Session], http: PoliteClient, settings: Settin
     return {sid: run_source(factory, sid, http, settings, **kw).outcome for sid in due_source_ids(factory, clock())}
 
 
+def purge_all(factory: sessionmaker[Session], settings: Settings) -> int:
+    from app.collectors.store import purge_snapshots
+    now = utcnow()
+    with session_scope(factory) as s:
+        rows = s.execute(select(Source.id, Source.retention_days)).all()
+    removed = sum(purge_snapshots(settings.snapshot_dir, sid, days, now) for sid, days in rows)
+    if removed:
+        log.info("purge : %d snapshots supprimés (le texte normalisé reste en base)", removed)
+    return removed
+
+
 def serve(factory: sessionmaker[Session], settings: Settings, *, tick_s: float = 15.0) -> None:
     """Boucle du worker. Un seul worker actif grâce à un verrou consultatif PostgreSQL."""
     stop = {"flag": False}
@@ -136,8 +147,25 @@ def serve(factory: sessionmaker[Session], settings: Settings, *, tick_s: float =
         if not lock_conn.execute(text("select pg_try_advisory_lock(:i)"), {"i": WORKER_LOCK_ID}).scalar():
             raise SystemExit("un autre worker de collecte est déjà actif")
         log.info("worker démarré")
+        from app.events.gazetteer import load_gazetteer
+        from app.events.pipeline import process_pending
+        gaz = load_gazetteer(str(settings.config_dir / "zones.yaml"))
+        last_purge = 0.0
         while not stop["flag"]:
-            run_due(factory, http, settings)
+            outcomes = run_due(factory, http, settings)
+            try:  # le traitement des événements ne doit jamais empêcher la collecte de continuer
+                with session_scope(factory) as s:
+                    done = process_pending(s, gaz=gaz)
+                if done["processed"] or done["errors"]:
+                    log.info("événements : %s", done)
+            except Exception:
+                log.exception("échec du traitement des événements (la collecte continue)")
+            if time.monotonic() - last_purge > 86_400:  # purge quotidienne des snapshots bruts au-delà de la rétention
+                last_purge = time.monotonic()
+                try:
+                    purge_all(factory, settings)
+                except Exception:
+                    log.exception("échec de la purge des snapshots")
             time.sleep(tick_s)
     finally:
         lock_conn.close()

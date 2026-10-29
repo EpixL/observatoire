@@ -39,7 +39,7 @@ def _advice_by_subject(text: str, ctx: DocCtx) -> dict[str, dict]:
             zones = ctx.gazetteer.codes(line)
             places = ctx.gazetteer.find(line)
             label_txt = re.split(r"\s*[:\-–]\s*", line, maxsplit=1)[0].strip()
-            subject = zones[0] if zones else label_txt
+            subject = (places[0].text.casefold() if places else label_txt.casefold())
             out[subject] = {"level": level, "label": label, "zones": zones, "place": places[0].text if places else label_txt,
                             "a": a, "b": b, "line": line, "departure": bool(DEPARTURE.search(f))}
             break
@@ -77,19 +77,26 @@ CZIB = re.compile(r"czib[\s-]*(\d{4})-(\d{2,3})(?:\s*r(\d+))?")
 
 
 def _czib_rows(text: str, ctx: DocCtx) -> dict[str, dict]:
-    rows: dict[str, dict] = {}
+    """Un bulletin = bloc de lignes depuis la ligne portant son identifiant jusqu'à l'identifiant suivant
+    (la structure réelle de la page est à confirmer sur le Pi : identifiant et description peuvent être sur des lignes distinctes)."""
+    marks = []
     for a, b, line in _line_spans(text):
-        f = fold(line)
-        m = CZIB.search(f)
-        if not m:
-            continue
+        m = CZIB.search(fold(line))
+        if m:
+            marks.append((a, m))
+    rows: dict[str, dict] = {}
+    for i, (a, m) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
+        block = text[a:min(end, a + 600)].rstrip()
+        f = fold(block)
         cid = f"{m[1]}-{m[2]}"
         until = None
         mu = re.search(r"valid until (.+)", f)
         if mu:
             until, _, _ = parse_date_in(mu.group(1), None)
-        rows[cid] = {"id": cid, "revision": int(m[3]) if m[3] else 0, "valid_until": until, "zones": ctx.gazetteer.codes(line),
-                     "place": (ctx.gazetteer.find(line) or [None])[0], "a": a, "b": b, "line": line}
+        places = ctx.gazetteer.find(block)
+        rows[cid] = {"id": cid, "revision": int(m[3]) if m[3] else 0, "valid_until": until, "zones": ctx.gazetteer.codes(block),
+                     "place": places[0] if places else None, "a": a, "b": a + len(block), "line": block}
     return rows
 
 

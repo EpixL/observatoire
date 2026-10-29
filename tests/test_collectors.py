@@ -345,3 +345,47 @@ def test_valid_but_empty_feed_is_ok_not_error(sources, settings, clock, rng):
     http = make_client(serve({F24: (200, XML, empty)}))
     res = run_source(sources, "france24-fr", http, settings, clock=clock, rng=rng)
     assert res.outcome == "ok" and res.items == []
+
+
+def test_worker_loop_collects_then_builds_events(sources, settings, monkeypatch):
+    """Câblage de production : un tour du worker = collecte des sources dues, puis traitement des événements."""
+    import signal
+    from app.collectors import runner
+    from app.models import Claim, Event
+
+    routes = {CERT: (200, XML, fixture_bytes("feeds/cert_fr_alertes.xml"))}
+    monkeypatch.setattr(runner, "PoliteClient", lambda **kw: make_client(serve(routes)))
+
+    class StopLoop(Exception):
+        pass
+
+    def stop(_):
+        raise StopLoop
+
+    monkeypatch.setattr(runner.time, "sleep", stop)
+    old = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        with pytest.raises(StopLoop):
+            runner.serve(sources, settings, tick_s=0)
+    finally:
+        for s, h in old.items():
+            signal.signal(s, h)
+    with session_scope(sources) as s:
+        assert len(s.scalars(select(Document)).all()) == 2
+        assert len(s.scalars(select(Claim)).all()) == 2 and len(s.scalars(select(Event)).all()) == 2
+
+
+def test_purge_removes_only_expired_snapshots(sources, settings, clock, rng):
+    import os, time
+    http = make_client(serve({CERT: (200, XML, fixture_bytes("feeds/cert_fr_alertes.xml"))}))
+    run_source(sources, "cert-fr-alertes", http, settings, clock=clock, rng=rng)
+    snaps = list((settings.snapshot_dir / "cert-fr-alertes").rglob("*.gz"))
+    assert len(snaps) == 1
+    from app.collectors.runner import purge_all
+    from app.normalization.dates import utcnow
+    assert purge_all(sources, settings) == 0                               # récent : conservé
+    old = time.time() - 120 * 86400
+    os.utime(snaps[0], (old, old))
+    assert purge_all(sources, settings) == 1 and not snaps[0].exists()      # > 90 j : supprimé
+    with session_scope(sources) as s:
+        assert s.scalars(select(DocumentVersion)).first().text                # le texte normalisé reste

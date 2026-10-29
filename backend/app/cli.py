@@ -94,6 +94,11 @@ def cmd_process(args, settings):
         print(process_pending(s, limit=args.limit))
 
 
+def cmd_purge(args, settings):
+    from app.collectors.runner import purge_all
+    print({"snapshots_supprimes": purge_all(_factory(settings), settings)})
+
+
 def cmd_verify(args, settings):
     from app.events.provenance import verify_all
     with session_scope(_factory(settings)) as s:
@@ -114,9 +119,11 @@ def main(argv=None):
     p.add_argument("--save-fixtures"); p.add_argument("--report", default="smoke-report.json"); p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("discover-feeds"); p.add_argument("source"); p.set_defaults(fn=cmd_discover)
     p = sub.add_parser("process"); p.add_argument("--limit", type=int, default=500); p.set_defaults(fn=cmd_process)
+    sub.add_parser("purge-snapshots").set_defaults(fn=cmd_purge)
     sub.add_parser("verify-provenance").set_defaults(fn=cmd_verify)
     args = ap.parse_args(argv)
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("alembic").setLevel(logging.WARNING)
     args.fn(args, load_settings(require_db=args.cmd not in ("smoke", "discover-feeds")))
 
 
