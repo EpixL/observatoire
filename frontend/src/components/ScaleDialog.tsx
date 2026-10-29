@@ -6,9 +6,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   gauge: GaugeState;
+  thresholdsModified?: number;
 }
 
-export function ScaleDialog({ open, onClose, gauge }: Props) {
+export function ScaleDialog({ open, onClose, gauge, thresholdsModified = 0 }: Props) {
   return (
     <Dialog id="scale" open={open} onClose={onClose} title="Comprendre l’échelle">
       <p>
@@ -41,6 +42,11 @@ export function ScaleDialog({ open, onClose, gauge }: Props) {
           </div>
         </li>
       </ul>
+      {thresholdsModified > 0 && (
+        <p className="notice" data-testid="scale-thr-note">
+          ⚠ {thresholdsModified} seuil{thresholdsModified > 1 ? 's' : ''} de décision diff{thresholdsModified > 1 ? 'èrent' : 'ère'} du plan : les critères ci-dessus sont ceux du plan, le calcul actuel n’y est pas strictement conforme. Voir Réglages › Seuils de la jauge.
+        </p>
+      )}
       <p className="notice">
         Le palier retenu est le plus élevé dont <b>toutes</b> les conditions sont remplies : pas de somme de signaux faibles. Un fait grave établi malgré une couverture
         partielle reste affiché avec le badge « couverture partielle ». La jauge ne résume pas tous les dangers : alertes civiles et statut nucléaire / radiologique sont

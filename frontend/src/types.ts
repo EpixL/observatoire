@@ -24,7 +24,7 @@ export interface GaugeState {
   /** Tendance 24 h et 7 j, « stable » = même palier. `from`/`to` servent à dire « passage du palier 25 au palier 40 ». */
   trend_24h: TrendInfo;
   trend_7d: TrendInfo;
-  policy: { version: string; label: string };
+  policy: { version: string; label: string; plan_version: string };
 }
 
 export interface TrendInfo {
@@ -102,7 +102,8 @@ export interface EventSource {
 export type LocationPrecision = 'pays' | 'region' | 'indicatif';
 
 export type EventLocation =
-  | { kind: 'point'; lon: number; lat: number; precision: LocationPrecision; label: string; iso?: string }
+  /** `zone_code` : code ISO 3166-1 alpha-2 de config/zones.yaml (backend). lon/lat = centre indicatif de la zone, jamais un lieu précis. */
+  | { kind: 'point'; lon: number; lat: number; precision: LocationPrecision; label: string; iso?: string; zone_code?: string }
   | { kind: 'none'; reason: string };
 
 export interface CriterionEffect {
@@ -124,7 +125,8 @@ export interface VeilleEvent {
   /** Statut de preuve (affiché à part du statut de lecture). */
   evidence_status: 'directe' | 'deux_origines' | 'origine_unique' | 'non_corroboree';
   occurred_at: string | null;
-  occurred_precision: 'minute' | 'heure' | 'jour' | 'inconnue';
+  /** Vocabulaire du backend (lot 2) : instant | day | month | year | unknown. */
+  occurred_precision: 'instant' | 'day' | 'month' | 'year' | 'unknown';
   published_at: string | null;
   first_seen_at: string;
   retrieved_at: string;
@@ -140,6 +142,14 @@ export interface VeilleEvent {
   independent_origins: number;
   /** Dossiers auxquels cet événement est rattaché. */
   dossier_ids: string[];
+  /** Liens PROPOSÉS (event_links du backend) : jamais une preuve ni une ligne causale sur la carte. */
+  proposed_links: ProposedLink[];
+}
+
+export interface ProposedLink {
+  event_id: string;
+  link_type: 'possible_common_cause' | 'possible_duplicate';
+  reason: string;
 }
 
 export interface Counters {
@@ -187,7 +197,10 @@ export interface MethodChange {
   handling: 'tendance_suspendue' | 'historique_recalcule';
 }
 
-export type SourceHealthState = 'ok' | 'retard' | 'indisponible';
+export type SourceHealthState = 'ok' | 'retard' | 'indisponible' | 'desactivee';
+
+/** Verdicts de collecte (backend : smoke / connector_health). OK_EMPTY du backend est affiché OK avec le motif « réponse vide ». */
+export type SourceVerdict = 'OK' | 'BLOCKED' | 'FAIL' | 'SKIPPED';
 
 export interface SourceRecord {
   id: string;
@@ -201,9 +214,13 @@ export interface SourceRecord {
   frequency: string;
   state: SourceHealthState;
   state_detail: string;
+  /** Dernier passage = dernière tentative (connector_health.last_attempt_at). */
+  last_attempt: string | null;
   last_success: string | null;
   last_novelty: string | null;
   licence: string;
+  verdict: SourceVerdict;
+  verdict_reason: string;
 }
 
 export interface JournalEntry {
@@ -247,6 +264,52 @@ export interface AiState {
   previous_runs: { at: string; model: string; agreement_with_rules: 'accord' | 'desaccord_partiel' | 'desaccord'; summary: string }[];
 }
 
+/** Seuil de la jauge, modifiable avec garde-fous (réglages). Les 8 paliers eux-mêmes ne sont pas modifiables. */
+export interface ThresholdItem {
+  key: string;
+  label: string;
+  description: string;
+  unit: string;
+  /** Valeur du plan (docs/PLAN.md). */
+  plan_value: number;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  /** Quel critère de palier ce seuil gouverne. */
+  affects: string;
+}
+
+export interface ThresholdChange {
+  id: string;
+  at: string;
+  kind: 'modification' | 'retour_plan';
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+  reason: string;
+  actor: string;
+  /** Version de politique créée par ce changement (jamais écrasée, jamais supprimée). */
+  policy_version: string;
+}
+
+export interface ThresholdsState {
+  policy_version: string;
+  items: ThresholdItem[];
+  history: ThresholdChange[];
+}
+
+export type NotificationLevel = 'officiel' | 'officiel_a3' | 'officiel_a2_a3';
+
+export interface NotificationSettings {
+  enabled: boolean;
+  level: NotificationLevel;
+  channel: 'telegram';
+  /** Le bot n'est activé qu'au lot 7 : l'interface seule existe. */
+  channel_state: 'non_active';
+}
+
 export interface Snapshot {
   scenario_id: string;
   as_of: string;
@@ -265,6 +328,8 @@ export interface Snapshot {
   civil_alert: CivilAlert | null;
   nuclear: NuclearBadge | null;
   ai: AiState;
+  thresholds: ThresholdsState;
+  notifications: NotificationSettings;
   /** Mode maquette : bandeau permanent « Données fictives — maquette ». */
   demo: boolean;
 }

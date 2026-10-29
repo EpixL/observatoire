@@ -1,77 +1,78 @@
 # ÉTAT — session B (dashboard, lot 4) · branche `dashboard`
 
-Dernière mise à jour : 29 octobre 2026. Je me suis arrêtée là, en attente de ta validation. Rien n'est fusionné dans `main`.
+Dernière mise à jour : 29 octobre 2026 (deuxième passe, après les réponses de David). Je me suis arrêtée là, en attente de ta validation. Rien n'est fusionné dans `main`.
+
+> **Provenance des consignes de cette passe** : les réponses de David à mes 6 questions m'ont été relayées par la session A (message inter-sessions), pas directement par David. Elles restent dans mon périmètre (ma branche, mes fichiers) et je les ai appliquées ; si un point a été mal relayé, dis-le-moi.
 
 ## En une phrase
 
-Le dashboard **VEILLE** existe en maquette complète sur **données fictives** : cadran, conclusion sans IA, carte hors ligne, fiches de preuves, dossiers, sources, journal, tous les états particuliers du plan, sur ordinateur et téléphone. Il ne fait aucune requête externe (vérifié par test).
+Le dashboard **VEILLE** (maquette, données fictives) est complet : cadran, conclusion sans IA, carte hors ligne, fiches de preuves, dossiers, sources, journal, états particuliers, et maintenant un **écran Réglages** (état des sources, notifications, seuils de la jauge avec garde-fous). Aucune requête externe (vérifié par test).
 
-## Comment le voir (le plus simple : les captures)
+## Les 6 réponses de David, appliquées
 
-Dossier [`docs/screenshots/`](docs/screenshots/) (27 images, visibles directement sur GitHub) :
+| # | Décision | Ce qui a été fait |
+|---|---|---|
+| 1 | Mobile : ordre strict du plan | Inchangé et testé : jauge → conclusion → carte → fiche → liste. |
+| 2 | Pays réels + bandeau « DONNÉES FICTIVES » permanent ; zones : France + flanc est | Événements fictifs sur Pologne, Lituanie, Lettonie, Biélorussie, Moldavie, Russie (région « ouest », pas le centre du pays), Ukraine, plus la Nouvelle-Calédonie (outre-mer) ; aucun autre pays. Bandeau ambre en majuscules, collé en haut sur ordinateur, présent sur toutes les pages (Réglages compris), **plus** une pastille « Données fictives » sur la carte (pour qu'une capture recadrée reste honnête) et « Donnée fictive » sur chaque fiche. |
+| 3 | Toujours bleu nuit par défaut | Le réglage du système est ignoré ; seul un choix manuel « clair » (Réglages › Général) est mémorisé. Testé avec un système en mode clair. |
+| 4 | Trois vues fixes | Inchangé. Conséquence : la **vue Europe est maintenant la vue par défaut** (la vue France n'affichait plus aucun événement puisque la zone secondaire est à l'est). |
+| 5a | Réglages › État des sources, lecture seule | Tableau (téléphone : cartes) : nom, famille, dernier passage, verdict **OK / BLOCKED / FAIL / SKIPPED** (symbole + mot), motif. Aucun bouton ni champ. |
+| 5b | Notifications | Interrupteur + niveau ; choix de David « décisions officielles + A3 » présélectionné ; rappel des niveaux A0–A3 ; canal Telegram « non activé — interface seule (lot 7) ». |
+| 5c | Seuils de la jauge + garde-fous | Voir ci-dessous. |
+| 6 | Écarts avec le backend | Tableau de 15 lignes dans [`docs/api-contract.md`](docs/api-contract.md), établi sur `origin/backend` au commit `0dcfbce` (la proposition de A n'existait pas encore) ; endpoints ajoutés au contrat, à `types.ts` et à `client.ts`. |
 
-- `nominal-sombre-{320,390,768,1440}.png` et `nominal-clair-{390,1440}.png` : la page d'accueil aux quatre largeurs demandées.
-- `etat-*-{390,1440}.png` : les six états particuliers (données indisponibles, situation ambiguë, alerte civile, nucléaire/radiologique, changement de méthode, fait grave avec couverture partielle).
-- `carte-europe|monde|outre-mer-1440.png`, `carte-mobile-390.png`, `dialogue-echelle-1440.png`, `dialogue-ia-1440.png`, `dossiers-1440.png`, `sources-1440.png`, `journal-1440.png`.
+### Seuils de la jauge : les garde-fous
 
-## Comment le lancer chez toi
+9 seuils modifiables (écart d'anomalie, durée minimale, origines indépendantes pour 25, événements et familles pour 40, réévaluations stables avant baisse, expiration d'un signal faible, familles obligatoires pour 0, référence minimale). Les 8 paliers et les définitions de 0 et de 100 **ne sont pas modifiables**.
+
+- Valeur du plan affichée à côté de chaque champ, **limites de sécurité** (hors limites ou hors pas : erreur, bouton bloqué).
+- **Confirmation avant d'enregistrer** : liste « ancien → nouveau », phrase sur la comparabilité, **motif obligatoire** (8 caractères minimum) et case à cocher.
+- **Chaque changement est daté et conservé** (nouvelle version `seuils-vN`, jamais d'écrasement) ; historique consultable avec motif et auteur.
+- **« Revenir aux valeurs du plan »** : même confirmation ; c'est un changement de plus dans l'historique, rien n'est effacé.
+- **Indicateur sur la jauge** tant que des seuils diffèrent du plan (« ⚠ Seuils modifiés (n) — différents de ceux du plan », cliquable), rappelé dans « Comprendre l'échelle ».
+- Phrase affichée en haut de l'écran et dans la confirmation : *« Changer un seuil change la façon dont les paliers sont calculés : les valeurs d'avant et d'après ne reposent plus sur les mêmes règles, l'historique et la tendance deviennent donc moins comparables. »* Après un changement, la tendance est affichée « non comparable » et un marqueur « Seuils vN » apparaît dans l'historique.
+- En maquette, l'enregistrement ne recalcule pas la jauge (c'est le serveur qui le fera) ; seuls l'historique, l'indicateur et la tendance réagissent.
+
+## Où voir (captures dans `docs/screenshots/`, 41 images)
+
+- Pages principales : `nominal-sombre-{320,390,768,1440}.png`, `nominal-clair-{390,1440}.png`.
+- **Réglages (mobile 390 + ordinateur 1440 pour chaque écran)** : `reglages-general-*`, `reglages-etat-des-sources-*` (scénario « données indisponibles » pour montrer OK, BLOCKED, FAIL et SKIPPED), `reglages-notifications-*`, `reglages-seuils-*`, `reglages-seuils-garde-fou-limite-*`, `reglages-seuils-confirmation-*`.
+- États : `etat-*` (7 états, dont `etat-seuils-modifies-*`), cartes (`carte-*`), dialogues, dossiers, sources, journal.
+
+## Lancer
 
 ```bash
-cd frontend
-npm ci
-PORT=5173 npm run dev          # puis ouvrir http://localhost:5173
+cd frontend && npm ci && PORT=5173 npm run dev     # http://localhost:5173
+# menu « Scénario de démonstration » en haut ; Réglages : bouton en haut à droite (#/reglages/seuils, etc.)
+npm test && npm run e2e && npm run screenshots
 ```
+Docker/Pi : voir `frontend/README.md` (port via `PORT`).
 
-Sur le Raspberry Pi (Docker) : `cd frontend && cp .env.example .env`, mettre l'IP du Pi dans `BIND_ADDRESS`, puis `docker compose -f compose.dashboard.yaml up --build`. Le port vient de la variable `PORT`.
-Le menu « Scénario de démonstration » en haut de la page bascule entre les 7 situations. Détails : [`frontend/README.md`](frontend/README.md).
+## Vérifications
 
-## Ce qui est fait (lot 4, sur maquette)
+- **71 tests unitaires** : échelle, escalier sans interpolation, contrastes WCAG AA des deux thèmes (dont le texte sur le bandeau ambre), scénarios, garde-fous des seuils (limites, versions successives, historique jamais écrasé, retour au plan, tendance non comparable).
+- **42 tests Playwright** (Chromium) : aucun défilement horizontal (toutes pages × 8 scénarios × 4 largeurs, Réglages compris), cibles tactiles ≥ 44 px, clavier, axe-core WCAG 2.x A/AA sans violation (2 thèmes, Réglages et dialogues compris), thème sombre par défaut malgré un système clair, pays du flanc est, bandeau permanent, état des sources en lecture seule, notifications, parcours complet des seuils (limite → confirmation → motif → historique → indicateur sur la jauge → retour au plan), **zéro requête externe**.
 
-- **Cadran** : arc de 270° gradué 0–25–55–85–100, uniquement les 8 paliers, « Indice de situation · pas une probabilité », bouton « Comprendre l'échelle » (0, chaque palier, 100, état non calculable). Tendance dite « passage du palier 25 au palier 40 », jamais en pourcentage. Aucun compte à rebours, aucune animation.
-- **Interprétation sans IA** : conclusion par gabarit (chaque preuve cliquable), hypothèses H0–H4 avec « en faveur / contradictions / discriminants manquants », couverture et santé des données.
-- **Carte 2D hors ligne** : vues France (métropole ou outre-mer, 8 vignettes), Europe, Monde ; 5 couches sélectionnables (la 6e, satellite, est grisée « phase ultérieure ») ; filtre de période ; « éléments retenus seulement » ; affichage des exclus. Marqueurs indicatifs (anneau pointillé), regroupés en comptant des événements uniques ; liste « non localisé ».
-- **Sélection synchronisée** marqueur ↔ liste de boutons ↔ fiche (sources, chaîne de reprises, dates séparées, règle/version, effet « critère rempli / non rempli »). Statuts retenu / contexte / à vérifier, distincts de « source officielle ». Exclus visibles avec leur motif.
-- **Pages** : Vue d'ensemble, Dossiers (onglets « Interprétation par règles / Éléments / Analyse IA »), Carte, Sources, Journal. Bouton IA factice avec confirmation du coût maximum, périmètre, états « désactivée » et « budget épuisé » : **aucun appel**.
-- **Mise en page** : ≥ 1100 px colonne gauche ≈ 25 % / carte ≈ 75 % ; 320–767 px ordre vertical du plan, carte directement dans la page, barre de navigation en bas, cibles ≥ 44 px, aucun défilement horizontal (testé sur 5 pages × 7 scénarios × 4 largeurs).
-- **Thèmes** : bleu nuit par défaut + clair accessible (réglage « automatique » suivant le système, mémorisé localement). Cyan = données, ambre = vigilance, rouge seulement à partir du palier 70 ou pour une alerte civile ; chaque couleur est doublée d'un libellé ou d'une forme.
-- **Prêt à brancher** : `src/api/client.ts` (interface unique, REST + SSE), types dans `src/types.ts`, contrat rédigé dans [`docs/api-contract.md`](docs/api-contract.md).
-- **Livraison** : versions exactes verrouillées (`package-lock.json`), Dockerfile multi-étapes sur images compatibles arm64 (vérifié sur Docker Hub : `node:22.22-alpine`, `nginx-unprivileged:1.28-alpine`), port par variable d'environnement, aucun secret.
+## Limites et points de vigilance
 
-## Vérifications effectuées
+- **Docker toujours non testé** (pas de démon dans ce cloud). À essayer d'abord sur le Pi.
+- Chromium seulement ; Safari iPhone et Firefox non testés.
+- **Événements fictifs sur la Russie, l'Ukraine, la Biélorussie…** : volontairement neutres (restriction aérienne, avis renouvelé, exercice annoncé, couverture réduite), tous marqués fictifs, aucun acte hostile attribué à un État. À garder ainsi si tu modifies les mocks.
+- **Les seuils, un risque d'usage** : pouvoir modifier les seuils, c'est aussi pouvoir les régler jusqu'à obtenir le palier qu'on espère. Les garde-fous (motif, historique, indicateur) rendent cela visible, pas impossible. Je recommande de **garder les valeurs du plan pendant tout le pilote** (lot 6) et de ne les toucher qu'avec un motif écrit, en relisant l'historique ensuite. Si tu veux plus strict : un « mode essai » qui n'affecte pas la jauge officielle, ou un délai avant prise d'effet (à décider avec A).
+- Les 9 seuils sont **ma lecture du plan** (§5 et §6) ; « expiration d'un signal faible = 168 h » est un défaut de maquette (le plan demande une durée versionnée sans la fixer). La liste réelle dépend du moteur du lot 3.
+- L'« auteur » d'un changement est fixe (« David (maquette) ») : pas d'authentification en maquette ; le serveur devra identifier l'auteur.
+- Non fait : authentification, pagination, impression, mode hors-ligne PWA, SSE réel (le code client existe, sans serveur en face).
+- Carte : toujours sans zoom ni déplacement (décision 4) ; en vue Europe, Lituanie et Lettonie se regroupent en un cercle « 2 » (comportement voulu : on compte des événements uniques).
+- `docs/PLAN.md` n'est pas copié sur cette branche (propriété de A).
 
-- 62 tests unitaires : échelle, escalier sans interpolation, intervalles sans mesure, contrastes WCAG AA (texte 4,5:1, éléments graphiques 3:1) dans les deux thèmes, cohérence des scénarios.
-- 32 tests Playwright (Chromium) : clavier (lien d'évitement, dialogues, onglets aux flèches, sélection par la liste), axe-core WCAG 2.x A/AA sans violation (2 thèmes × 4 scénarios × 5 pages + dialogue), états particuliers, **zéro requête hors de la page**.
+## Écarts avec le backend (résumé, détail dans `docs/api-contract.md`)
 
-## Choix pris, en termes simples
+À aligner avec A : (1) seules 3 routes existent, tout le reste (overview, events, gauge, history, dossiers, journal, thresholds, notifications, SSE) est à créer ; (2) états de connecteurs `ok/degraded/failing/rate_limited/blocked` à convertir en `verdict` OK/BLOCKED/FAIL/SKIPPED + `state` ; (3) pas de centres indicatifs par zone dans `zones.yaml` (nécessaires à la carte) ; (4) statuts d'événement `active/to_verify/…` vs retenu/contexte/à vérifier ; (5) raisons d'exclusion à compléter (`hors_perimetre`, `preuve_insuffisante`) ; (6) `index_policy_versions` : insert-only pour les seuils. **Déjà alignés** : vocabulaire des précisions de date (le dashboard a repris celui du backend), groupes d'origine, extraits avec positions, liens proposés (`event_links`).
 
-1. **Carte dessinée par moi en SVG avec d3-geo, pas Leaflet/MapLibre** : pas de tuiles à télécharger, donc elle marche sans Internet. Contrepartie : pas de zoom ni de glisser (trois vues fixes). Suffisant pour des positions « à l'échelle du pays » ; à reconsidérer si tu veux du détail.
-2. **Géométries Natural Earth simplifiées (285 Ko)**, commitées ; le script qui les fabrique est dans `frontend/scripts/`.
-3. **God's Eye View** : cloné et lu. Licence MIT, mais je n'ai **copié aucun code** : c'est un globe 3D (Cesium), le plan interdit de le reprendre. J'ai gardé l'esprit : poste de supervision sombre, panneau de couches, sélection d'objets, chiffres tabulaires.
-4. **Les marqueurs de la carte ne sont pas accessibles au clavier** ; la liste de boutons l'est et fait exactement la même chose (c'est ce que demande le plan). Évite deux arrêts de tabulation par élément.
-5. **Le dashboard n'applique aucune règle métier** : il affiche ce que le serveur calcule. Seule la phrase de conclusion est assemblée côté écran, à partir de morceaux structurés.
-6. **Horloge figée** (29 oct. 2026 15:30 Paris) dans la maquette, pour que captures et tests restent identiques.
-7. **Palier 40 par défaut** dans la maquette parce qu'il montre le plus de fonctions (convergence, hypothèses) ; ce n'est pas une évaluation de quoi que ce soit.
+## Questions restantes pour David
 
-## Limites et points de vigilance (honnêtement)
-
-- **Docker non testé ici** : le conteneur de ce cloud n'a pas de démon Docker. Dockerfile et configuration nginx sont écrits avec soin mais **jamais exécutés**. À tester sur le Pi en premier.
-- Testé sous **Chromium uniquement** (pas Safari iPhone ni Firefox). Les cibles tactiles et le rendu SVG sur un vrai téléphone restent à vérifier par toi.
-- **Mobile : la carte arrive après la jauge et la conclusion** (environ un écran et demi de défilement). Respecte l'ordre du plan, mais « visible directement » est discutable : je peux raccourcir la conclusion sur téléphone ou remonter la carte, à ta demande.
-- Le **paquet JavaScript fait ~630 Ko** (dont 285 Ko de cartes). Sans conséquence sur un réseau local ; chargement différé possible plus tard.
-- Les événements fictifs utilisent de **vrais noms de pays** (Pologne, Roumanie…) pour la cohérence géographique. Chacun est marqué « Donnée fictive » et le bandeau est permanent, mais c'est à surveiller si une capture sort de son contexte. Alternative : pays imaginaires, au prix du réalisme de la carte.
-- Les règles du plan (§6) sont des **propositions à tester**, pas une norme : l'interface le répète (échelle, notice). Elle ne valide pas leur justesse.
-- Non fait : réglages réels (thème et mode IA seulement, sans effet serveur), authentification, pagination, internationalisation, impression, mode hors-ligne PWA, mise à jour SSE réelle (le code existe dans `client.ts` mais n'a pas de serveur en face).
-- `docs/PLAN.md` n'est **pas copié** sur cette branche (il appartient à la session A, sur `backend`).
-
-## Ce qui reste (hors lot 4)
-
-Brancher la vraie API quand la session A aura aligné ses réponses sur `docs/api-contract.md` ; tester Docker/arm64 sur le Pi ; vérifier sur un vrai téléphone ; affiner les libellés avec les vraies règles du moteur (lot 3) ; lot 5 (IA réelle) à venir.
-
-## Questions pour toi
-
-1. **Mobile** : on garde l'ordre strict du plan (jauge → conclusion → carte), ou tu préfères la carte plus haut ?
-2. **Pays réels ou imaginaires** dans les événements fictifs ?
-3. **Thème par défaut** : suivre le système (actuel) ou toujours bleu nuit ?
-4. **Zoom/déplacement de la carte** : utile pour toi, ou les trois vues fixes suffisent ?
-5. Le plan dit « Réglages » dans l'en-tête : qu'attends-tu d'y trouver au-delà du thème et du mode IA (seuils ? sources ? notifications) ?
-6. Veux-tu que je prépare, pour la session A, une courte liste d'écarts entre `api-contract.md` et son modèle de données dès que sa branche aura avancé ?
+1. **Notifications activées par défaut ?** Tu as choisi le niveau « officielles + A3 ». Le plan recommande 2 à 4 semaines de **mode silencieux** avant d'activer quoi que ce soit : on présélectionne « activées » (actuel) ou « silencieux » jusqu'à la fin du pilote ?
+2. **Seuils** : la liste des 9 te convient-elle, ou en veux-tu moins (par prudence) ? Et es-tu d'accord pour **geler** les seuils pendant le pilote ?
+3. **Vue Europe par défaut** (au lieu de France) : OK ?
+4. **Russie** : j'ai placé le marqueur sur « l'ouest de la Russie » (échelle région) plutôt qu'au centre du pays (qui tomberait en Sibérie). C'est cohérent avec « jamais de coordonnées précises », mais dis-moi si tu préfères un autre repère.
+5. Nom d'auteur dans l'historique des seuils : « David » suffit pour un seul utilisateur ?

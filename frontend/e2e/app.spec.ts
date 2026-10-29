@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 import { open, watchRequests } from './helpers';
 
 const WIDTHS = [320, 390, 768, 1440];
-const ROUTES = ['vue', 'dossiers', 'carte', 'sources', 'journal'];
-const SCENARIOS = ['nominal', 'indisponible', 'ambigu', 'civile', 'nucleaire', 'methode', 'partielle'];
+const ROUTES = ['vue', 'dossiers', 'carte', 'sources', 'journal', 'reglages/general', 'reglages/sources', 'reglages/notifications', 'reglages/seuils'];
+const SCENARIOS = ['nominal', 'indisponible', 'ambigu', 'civile', 'nucleaire', 'methode', 'partielle', 'seuils'];
 
 test.describe('mise en page', () => {
   for (const w of WIDTHS) {
@@ -184,6 +184,7 @@ test.describe('carte', () => {
   });
   test('un événement hors de la vue courante propose de changer de vue', async ({ page }) => {
     await open(page);
+    await page.getByTestId('view-france').click();
     await page.getByTestId('ev-EV-002').click();
     await page.getByRole('button', { name: 'Passer à la vue Europe' }).click();
     await expect(page.getByTestId('view-europe')).toHaveAttribute('aria-pressed', 'true');
@@ -210,13 +211,12 @@ test.describe('dossiers et IA factice', () => {
     await expect(page.getByTestId('ai-done')).toContainText('aucune requête n’a été envoyée');
     expect(external).toEqual([]);
   });
-  test('IA désactivée ou budget épuisé : message, reste utilisable', async ({ page }) => {
-    await open(page, 'nominal', 'dossiers');
-    await page.getByTestId('settings-btn').click();
+  test('IA désactivée : message, reste utilisable', async ({ page }) => {
+    await open(page, 'nominal', 'reglages/general');
     await page.getByLabel(/Désactivée/).check();
-    await page.keyboard.press('Escape');
+    await page.goto(page.url().replace(/#.*/, '#/dossiers'));
     await page.getByTestId('tab-ia').click();
-    await expect(page.getByTestId('panel-ia').or(page.locator('#panel-ia'))).toContainText('désactivé');
+    await expect(page.locator('#panel-ia')).toContainText('désactivé');
     await expect(page.getByTestId('ai-button')).toHaveCount(0);
     await page.getByTestId('tab-regles').click();
     await expect(page.locator('#panel-regles')).toContainText('Durcissement des précautions');
@@ -261,5 +261,131 @@ test.describe('clavier, focus et zéro appel externe', () => {
     await links.nth(3).click();
     await expect(page.getByTestId('sources')).toBeVisible();
     await expect(links.nth(3)).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+test.describe('thème et flanc est', () => {
+  test.use({ colorScheme: 'light' });
+  test('bleu nuit par défaut même si le système est en mode clair', async ({ page }) => {
+    await open(page, 'nominal', '', null);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(bg).toBe('rgb(10, 19, 37)');
+  });
+  test('choix manuel du thème clair, mémorisé', async ({ page }) => {
+    await open(page, 'nominal', 'reglages/general', null);
+    await page.getByLabel(/Clair — accessible/).check();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  });
+});
+
+test.describe('événements fictifs : pays réels, bandeau permanent', () => {
+  test('zone : France + flanc est (PL, LT, LV, BY, MD, RU, UA)', async ({ page }) => {
+    await open(page);
+    for (const [id, pays] of [['EV-001', 'Pologne'], ['EV-002', 'Lituanie'], ['EV-003', 'Moldavie'], ['EV-004', 'Russie'], ['EV-005', 'Lettonie'], ['EV-006', 'Biélorussie'], ['EV-013', 'Ukraine'], ['EV-007', 'Nouvelle-Calédonie']]) {
+      await page.getByTestId(`ev-${id}`).click();
+      await expect(page.getByTestId('event-card')).toContainText(pays);
+      await expect(page.getByTestId('event-card')).toContainText('Donnée fictive');
+    }
+  });
+  test('bandeau DONNÉES FICTIVES visible partout, aussi sur la carte et dans Réglages', async ({ page }) => {
+    for (const r of ROUTES) {
+      await open(page, 'nominal', r);
+      const bar = page.locator('.demo-bar strong');
+      await expect(bar).toBeVisible();
+      expect(await bar.evaluate((e) => getComputedStyle(e).textTransform)).toBe('uppercase');
+    }
+    await open(page);
+    await expect(page.locator('.map-badge')).toBeVisible();
+  });
+  test('liens proposés : jamais une preuve', async ({ page }) => {
+    await open(page);
+    await page.getByTestId('ev-EV-001').click();
+    await expect(page.getByTestId('event-card')).toContainText('Cause commune possible');
+    await expect(page.getByTestId('event-card')).toContainText('non établie');
+  });
+});
+
+test.describe('réglages', () => {
+  test('état des sources : lecture seule, quatre verdicts, motif', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, 'indisponible', 'reglages/sources');
+    const p = page.getByTestId('sources-status');
+    await expect(p.locator('thead th')).toHaveText(['Source', 'Famille', 'Dernier passage', 'Verdict', 'Motif']);
+    for (const v of ['OK', 'BLOCKED', 'FAIL', 'SKIPPED']) await expect(p.locator(`.verdict-badge.${v}`).first()).toBeVisible();
+    await expect(p).toContainText('anti-robot');
+    await expect(p.locator('input, button, select, textarea')).toHaveCount(0);
+  });
+  test('état des sources sur téléphone : cartes lisibles', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, 'nominal', 'reglages/sources');
+    await expect(page.getByTestId('sources-status').locator('li.src-row')).toHaveCount(9);
+  });
+  test('notifications : choix « officielles + A3 », interrupteur, canal non activé', async ({ page }) => {
+    await open(page, 'nominal', 'reglages/notifications');
+    await expect(page.getByLabel(/officielles \+ changements majeurs \(A3\)/)).toBeChecked();
+    await expect(page.getByTestId('notifications')).toContainText('non activé');
+    await page.getByTestId('notif-enabled').uncheck();
+    await expect(page.getByLabel(/officielles seulement/)).toBeDisabled();
+    await page.getByTestId('notif-enabled').check();
+    await page.getByLabel(/analyses approfondies \(A2\)/).check();
+    await expect(page.getByLabel(/analyses approfondies \(A2\)/)).toBeChecked();
+  });
+  test('seuils : garde-fous (limites, confirmation, motif, historique, retour au plan, indicateur sur la jauge)', async ({ page }) => {
+    await open(page, 'nominal', 'reglages/seuils');
+    await expect(page.getByTestId('comparability')).toContainText('moins comparables');
+    await expect(page.getByTestId('thr-status')).toContainText('conformes au plan');
+    await expect(page.getByTestId('thr-save')).toBeDisabled();
+    // limite de sécurité
+    const k = page.getByTestId('thr-anomaly_mad_k');
+    await k.fill('9');
+    await expect(page.getByRole('alert')).toContainText('limites de sécurité');
+    await expect(page.getByTestId('thr-save')).toBeDisabled();
+    // changement valide : confirmation obligatoire, motif obligatoire
+    await k.fill('2.5');
+    await page.getByTestId('thr-save').click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg).toContainText('3 → 2,5');
+    await expect(dlg).toContainText('moins comparables');
+    await expect(page.getByTestId('thr-confirm')).toBeDisabled();
+    await page.getByTestId('thr-reason').fill('court');
+    await page.getByTestId('thr-ack').check();
+    await expect(page.getByTestId('thr-confirm')).toBeDisabled(); // motif < 8 caractères
+    await page.getByTestId('thr-reason').fill('Essai de détection plus précoce');
+    await page.getByTestId('thr-confirm').click();
+    await expect(page.getByTestId('thr-status')).toContainText('1 seuil différent du plan');
+    const hist = page.getByTestId('thr-history');
+    await expect(hist).toContainText('Essai de détection plus précoce');
+    await expect(hist).toContainText('seuils-v2');
+    // indicateur sur la jauge + tendance non comparable + marqueur d'historique
+    await page.getByTestId('nav-vue').click();
+    await expect(page.getByTestId('thresholds-flag')).toContainText('Seuils modifiés (1)');
+    await expect(page.locator('.gauge')).toContainText('tendance non comparable');
+    await expect(page.getByTestId('history').locator('.mchg')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Comprendre l’échelle' }).click();
+    await expect(page.getByTestId('scale-thr-note')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // retour aux valeurs du plan : confirmation + motif, historique conservé
+    await page.getByTestId('thresholds-flag').getByRole('link').click();
+    await page.getByTestId('thr-reset').click();
+    await page.getByTestId('thr-reason').fill('Retour à la référence du plan');
+    await page.getByTestId('thr-ack').check();
+    await page.getByTestId('thr-confirm').click();
+    await expect(page.getByTestId('thr-status')).toContainText('conformes au plan');
+    await expect(hist.locator('li')).toHaveCount(2);
+    await expect(hist).toContainText('Retour au plan');
+    await expect(hist).toContainText('Essai de détection plus précoce');
+    await page.getByTestId('nav-vue').click();
+    await expect(page.getByTestId('thresholds-flag')).toHaveCount(0);
+  });
+  test('seuils : scénario déjà modifié (indicateur, historique daté, tendance non comparable)', async ({ page }) => {
+    await open(page, 'seuils');
+    await expect(page.getByTestId('thresholds-flag')).toContainText('Seuils modifiés (2)');
+    await expect(page.locator('.gauge')).toContainText('seuils modifiés');
+    await page.getByTestId('thresholds-flag').getByRole('link').click();
+    await expect(page.getByTestId('thr-history').locator('li')).toHaveCount(2);
+    await expect(page.getByTestId('thr-history')).toContainText('Motif');
   });
 });

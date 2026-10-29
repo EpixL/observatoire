@@ -1,5 +1,5 @@
 /*
- * Jetons de couleur. Thème sombre « poste de supervision » par défaut, thème clair accessible.
+ * Jetons de couleur. Thème sombre « poste de supervision » TOUJOURS par défaut (indépendant du réglage du système), thème clair accessible choisi à la main dans Réglages.
  * Cyan = données · ambre = vigilance · rouge = faits graves documentés (jamais permanent).
  * Les paires texte/fond sont vérifiées par src/lib/contrast.test.ts (WCAG AA : 4,5:1 pour le texte).
  */
@@ -51,31 +51,4 @@
   --map-land-dim: #eaf0f9;
   --map-border: #8ea3c4;
   --map-halo: rgba(0, 102, 125, 0.14);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    color-scheme: light;
-    --bg: #eaf0f9;
-    --panel: #ffffff;
-    --panel-2: #f1f5fb;
-    --line: #b8c7de;
-    --text: #0e1a31;
-    --muted: #44587a;
-    --data: #00667d;
-    --watch: #8a5200;
-    --grave: #b3261e;
-    --ok: #1d6b3f;
-    --on-accent: #ffffff;
-    --accent-bg: #00667d;
-    --watch-bg: #8a5200;
-    --grave-bg: #b3261e;
-    --track: #cfdaec;
-    --focus: #0e1a31;
-    --map-sea: #dce7f6;
-    --map-land: #f7fafe;
-    --map-land-dim: #eaf0f9;
-    --map-border: #8ea3c4;
-    --map-halo: rgba(0, 102, 125, 0.14);
-  }
 }

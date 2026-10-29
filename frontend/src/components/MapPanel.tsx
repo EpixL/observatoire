@@ -145,6 +145,7 @@ export function MapPanel(p: Props) {
         {layersPanel}
         <div>
           <div className="map-frame">
+            <span className="map-badge">Données fictives</span>
             {showOverseas ? (
               <div className="overseas" data-testid="overseas">
                 {OVERSEAS.map((o) => (

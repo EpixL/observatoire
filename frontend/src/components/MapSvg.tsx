@@ -66,8 +66,10 @@ export function MapSvg({ width, height, projection, backdrop, focus = [], events
   const groups = useMemo(() => cluster(placed, (small ? 20 : 30) / scale), [placed, scale, small]);
 
   const haloIsos = new Set(events.filter((e) => e.location.kind === 'point' && e.location.precision === 'pays').map((e) => (e.location as { iso?: string }).iso));
+  // pas d'étiquette de pays sous un regroupement : il masquerait le texte
+  const clustered = new Set(groups.filter((g) => g.items.length > 1).flatMap((g) => g.items.map((e) => e.id)));
   const labelled = events
-    .filter((e) => e.location.kind === 'point' && e.location.iso && e.location.precision === 'pays')
+    .filter((e) => e.location.kind === 'point' && e.location.iso && e.location.precision === 'pays' && !clustered.has(e.id))
     .map((e) => e.location as { iso: string });
 
   return (

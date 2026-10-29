@@ -21,13 +21,15 @@ interface Props {
   gauge: GaugeState;
   compact?: boolean;
   onExplain: () => void;
+  /** Nombre de seuils différents de ceux du plan (garde-fou : toujours signalé sur la jauge). */
+  thresholdsModified?: number;
 }
 
 /**
  * Jauge circulaire partielle (270°) graduée 0–25–55–85–100.
  * Seuls les huit paliers sont affichables : pas de 43,7. Pas d'aiguille animée, pas de minuit, pas de compte à rebours.
  */
-export function Gauge({ gauge, compact, onExplain }: Props) {
+export function Gauge({ gauge, compact, onExplain, thresholdsModified = 0 }: Props) {
   const unavailable = gauge.status === 'non_calculable' || gauge.palier === null;
   const palier = gauge.palier;
   const tone = unavailable ? 'neutral' : palierTone(palier);
@@ -98,6 +100,13 @@ export function Gauge({ gauge, compact, onExplain }: Props) {
       {gauge.partial_coverage && (
         <p style={{ marginTop: 8 }}>
           <span className="chip watch">Couverture partielle · palier documenté</span>
+        </p>
+      )}
+      {thresholdsModified > 0 && (
+        <p style={{ marginTop: 8 }} data-testid="thresholds-flag">
+          <a className="chip watch" href="#/reglages/seuils" style={{ minHeight: 44, textDecoration: 'none' }}>
+            ⚠ Seuils modifiés ({thresholdsModified}) — différents de ceux du plan
+          </a>
         </p>
       )}
       {!unavailable && (

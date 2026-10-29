@@ -1,4 +1,4 @@
-import type { HistoryPoint, MethodChange } from '../types';
+import type { HistoryPoint, MethodChange, ThresholdChange } from '../types';
 import { PALIER_VALUES, palierLabel } from '../lib/scale';
 import { stepPaths, toSegments } from '../lib/history';
 import { fmt, fmtDay } from '../lib/format';
@@ -10,7 +10,11 @@ const R = 12;
 const T = 14;
 const B = 30;
 
-export function History({ points, changes }: { points: HistoryPoint[]; changes: MethodChange[] }) {
+export function History({ points, changes, thresholdChanges = [] }: { points: HistoryPoint[]; changes: MethodChange[]; thresholdChanges?: ThresholdChange[] }) {
+  const markers = [
+    ...changes.map((c) => ({ at: c.at, label: `Méthode ${c.from_version.replace('echelle-', '')} → ${c.to_version.replace('echelle-', '')}` })),
+    ...[...new Map(thresholdChanges.map((c) => [c.policy_version, c])).values()].map((c) => ({ at: c.at, label: `Seuils ${c.policy_version.replace('seuils-', '')}` })),
+  ];
   const t0 = Date.parse(points[0].at);
   const t1 = Date.parse(points[points.length - 1].at);
   const x = (iso: string) => L + ((Date.parse(iso) - t0) / (t1 - t0)) * (W - L - R);
@@ -53,14 +57,17 @@ export function History({ points, changes }: { points: HistoryPoint[]; changes: 
             </g>
           );
         })}
-        {changes.map((c) => (
-          <g key={c.at}>
-            <line className="mchg" x1={x(c.at)} x2={x(c.at)} y1={T} y2={H - B} />
-            <text className="mchg-lbl" x={x(c.at) + 5} y={T + 14}>
-              Méthode {c.from_version.replace('echelle-', '')} → {c.to_version.replace('echelle-', '')}
-            </text>
-          </g>
-        ))}
+        {markers.map((c, i) => {
+          const mx = x(c.at);
+          return (
+            <g key={c.at + c.label}>
+              <line className="mchg" x1={mx} x2={mx} y1={T} y2={H - B} />
+              <text className="mchg-lbl" x={mx > W - 120 ? mx - 5 : mx + 5} y={T + 14 + (i % 2) * 28} textAnchor={mx > W - 120 ? 'end' : 'start'}>
+                {c.label}
+              </text>
+            </g>
+          );
+        })}
         {paths.map((d, i) => (
           <path key={i} className="step" d={d} />
         ))}

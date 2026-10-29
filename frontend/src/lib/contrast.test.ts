@@ -25,7 +25,7 @@ const TEXT_PAIRS: [string, string][] = [
   ['watch', 'bg'], ['watch', 'panel'], ['watch', 'panel-2'],
   ['grave', 'panel'], ['grave', 'panel-2'],
   ['ok', 'panel'], ['ok', 'panel-2'],
-  ['on-accent', 'accent-bg'],
+  ['on-accent', 'accent-bg'], ['on-accent', 'watch-bg'], ['on-accent', 'grave-bg'],
 ];
 // Éléments graphiques porteurs d’information (arc de jauge, marqueurs, focus) : seuil 3:1. Les frontières de pays sont décoratives.
 const GRAPHIC_PAIRS: [string, string][] = [['data', 'panel'], ['watch', 'panel'], ['grave', 'panel'], ['focus', 'panel'], ['focus', 'bg']];
@@ -41,10 +41,4 @@ describe.each([
   it.each(GRAPHIC_PAIRS)('graphique %s sur %s ≥ 3:1', (fg, bg) => {
     expect(ratio(t[fg], t[bg])).toBeGreaterThanOrEqual(3);
   });
-});
-
-it('le thème clair automatique reprend les mêmes valeurs que le thème clair explicite', () => {
-  const explicit = block(":root[data-theme='light']");
-  const auto = block(':root:not([data-theme])');
-  expect(auto).toEqual(explicit);
 });

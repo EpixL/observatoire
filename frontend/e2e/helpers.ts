@@ -11,8 +11,8 @@ export function watchRequests(page: Page): string[] {
   return external;
 }
 
-export async function open(page: Page, scenario = 'nominal', route = '', theme: 'dark' | 'light' = 'dark') {
-  await page.addInitScript((t) => window.localStorage.setItem('veille-theme', t), theme);
+export async function open(page: Page, scenario = 'nominal', route = '', theme: 'dark' | 'light' | null = 'dark') {
+  if (theme) await page.addInitScript((t) => window.localStorage.setItem('veille-theme', t), theme);
   await page.goto(`/?scenario=${scenario}#/${route}`);
   await page.waitForSelector('main');
 }

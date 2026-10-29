@@ -11,8 +11,13 @@ import type {
   JournalEntry,
   MethodChange,
   Palier,
+  NotificationSettings,
   Snapshot,
   SourceRecord,
+  SourceVerdict,
+  ThresholdChange,
+  ThresholdItem,
+  ThresholdsState,
   VeilleEvent,
 } from '../types';
 import { BASE_EVENTS, FLOOD_EVENT, GRAVE_EVENT, NOW } from './events';
@@ -33,6 +38,7 @@ export const SCENARIOS: ScenarioMeta[] = [
   { id: 'nucleaire', label: 'Badge nucléaire / radiologique' },
   { id: 'methode', label: 'Changement de méthode' },
   { id: 'partielle', label: 'Fait grave, couverture partielle' },
+  { id: 'seuils', label: 'Seuils de la jauge modifiés' },
 ];
 
 /* ---------- Hypothèses ---------- */
@@ -62,7 +68,7 @@ function dossiers(hyp: Hypothesis[], civilTitle?: string): DossierScenario[] {
     {
       id: 'D-CIV',
       title: civilTitle ?? 'Perturbation majeure de services civils',
-      zone: 'Europe centrale et orientale',
+      zone: 'Flanc est de l’Europe',
       horizon: 'Présent à 72 heures',
       state: 'actif',
       summary: 'Coupures mesurées, opérateurs affectés, durée et étendue.',
@@ -80,7 +86,7 @@ function dossiers(hyp: Hypothesis[], civilTitle?: string): DossierScenario[] {
     {
       id: 'D-REG',
       title: 'Dégradation régionale de sécurité',
-      zone: 'Europe — flanc oriental',
+      zone: 'Flanc est de l’Europe',
       horizon: '7 jours',
       state: 'actif',
       summary: 'Incidents corroborés, restrictions civiles, changements diplomatiques et de posture documentés.',
@@ -92,7 +98,7 @@ function dossiers(hyp: Hypothesis[], civilTitle?: string): DossierScenario[] {
         missing: ['Changement de posture publiquement documenté', 'Corroboration de l’affirmation de sabotage (EV-005)'],
         hypotheses: hyp,
       },
-      event_ids: ['EV-001', 'EV-002', 'EV-003', 'EV-004', 'EV-005', 'EV-006'],
+      event_ids: ['EV-001', 'EV-002', 'EV-003', 'EV-004', 'EV-005', 'EV-006', 'EV-013'],
       updated_at: t(2),
     },
     {
@@ -118,7 +124,7 @@ function dossiers(hyp: Hypothesis[], civilTitle?: string): DossierScenario[] {
 
 /* ---------- Sources ---------- */
 
-type SrcInit = Omit<SourceRecord, 'state' | 'state_detail' | 'last_success' | 'last_novelty'>;
+type SrcInit = Omit<SourceRecord, 'state' | 'state_detail' | 'last_attempt' | 'last_success' | 'last_novelty' | 'verdict' | 'verdict_reason'>;
 const SOURCE_REGISTRY: SrcInit[] = [
   { id: 'S-MAE', name: 'Conseils aux voyageurs et dernières minutes', organism: 'France Diplomatie', kind: 'autorite', family: 'Autorités / mesures', zone: 'Monde', access: 'RSS + pages', expected_delay: '2–5 min', frequency: '5 min', licence: 'À vérifier à l’implémentation' },
   { id: 'S-EASA', name: 'Conflict Zone Information Bulletins', organism: 'EASA', kind: 'autorite', family: 'Autorités / mesures', zone: 'Europe', access: 'RSS / JSON', expected_delay: '2–5 min', frequency: '5 min', licence: 'À vérifier à l’implémentation' },
@@ -132,31 +138,77 @@ const SOURCE_REGISTRY: SrcInit[] = [
 ];
 
 function sources(scn: string): SourceRecord[] {
-  const out: SourceRecord[] = SOURCE_REGISTRY.map((s, i) => {
+  return SOURCE_REGISTRY.map((s, i) => {
     let state: SourceRecord['state'] = 'ok';
-    let detail = 'À jour dans les délais attendus.';
-    let success: string | null = t(0.1 + i * 0.05);
-    let novelty: string | null = t(2 + i * 3);
+    let verdict: SourceVerdict = 'OK';
+    let reason = 'Dernière collecte réussie, dans les délais attendus.';
+    let attempt: string | null = t(0.1 + i * 0.05);
+    let success: string | null = attempt;
+    const novelty: string | null = t(2 + i * 3);
+    if (s.id === 'S-OTAN') {
+      state = 'indisponible';
+      verdict = 'BLOCKED';
+      reason = 'Page protégée par un contrôle anti-robot : aucun contournement (règle du projet). Source de secours active.';
+      success = t(40);
+    }
+    if (s.id === 'S-CERT') {
+      state = 'desactivee';
+      verdict = 'SKIPPED';
+      reason = 'Source facultative V1, désactivée dans la configuration (aucun endpoint vérifié).';
+      attempt = null;
+      success = null;
+    }
     if (s.id === 'S-AVIA') {
       state = 'retard';
-      detail = 'Quota partiellement consommé : cadence réduite (couverture 62 %).';
+      reason = 'Réponse reçue mais quota partiellement consommé : cadence réduite, couverture des récepteurs 62 %.';
       success = t(1.2);
-      novelty = t(11);
     }
     if (scn === 'indisponible' && s.id === 'S-IODA') {
       state = 'indisponible';
-      detail = 'Échec de connexion depuis 18 h. Dernier succès conservé ; aucune ancienne observation n’est présentée comme un flux en direct.';
+      verdict = 'FAIL';
+      reason = 'Échec de connexion depuis 18 h (délai dépassé, 12 échecs consécutifs). Dernier succès conservé ; aucune ancienne observation n’est présentée comme un flux en direct.';
       success = t(18);
     }
     if (scn === 'indisponible' && s.id === 'S-AVIA') {
       state = 'indisponible';
-      detail = 'Quota API épuisé : état technique, pas disparition d’avions.';
+      verdict = 'SKIPPED';
+      reason = 'Quota API épuisé : collecte suspendue. État technique, pas disparition d’avions.';
       success = t(30);
     }
-    return { ...s, state, state_detail: detail, last_success: success, last_novelty: novelty };
+    return { ...s, state, state_detail: reason, verdict, verdict_reason: reason, last_attempt: attempt, last_success: success, last_novelty: novelty };
   });
-  return out;
 }
+
+/* ---------- Seuils de la jauge, notifications ---------- */
+
+const TH = (key: string, label: string, description: string, unit: string, plan: number, min: number, max: number, step: number, affects: string): ThresholdItem => ({ key, label, description, unit, plan_value: plan, value: plan, min, max, step, affects });
+
+export const PLAN_THRESHOLDS: ThresholdItem[] = [
+  TH('anomaly_mad_k', 'Écart de détection d’anomalie', 'Une mesure est anormale au-delà de ce nombre de dispersions robustes (MAD) par rapport à sa référence. Réglage expérimental du plan (§5), pas un seuil scientifiquement validé.', 'dispersions', 3, 2, 6, 0.5, 'Paliers 10 et 25 (mesures techniques)'),
+  TH('anomaly_windows', 'Durée minimale d’une anomalie', 'Nombre de fenêtres consécutives pendant lesquelles l’écart doit durer.', 'fenêtres', 3, 1, 8, 1, 'Paliers 10 et 25'),
+  TH('origins_for_25', 'Origines indépendantes pour le palier 25', 'Sans preuve directe, nombre minimal d’origines réellement indépendantes rapportant le fait (§6.3).', 'origines', 2, 2, 4, 1, 'Palier 25 et au-dessus'),
+  TH('events_for_40', 'Événements matériels distincts pour le palier 40', 'Même zone, même fenêtre (§6.3).', 'événements', 2, 2, 5, 1, 'Palier 40'),
+  TH('families_for_40', 'Familles d’indicateurs pour le palier 40', 'Familles distinctes (autorités, faits régionaux, mesure technique…).', 'familles', 2, 2, 4, 1, 'Palier 40'),
+  TH('downgrade_evals', 'Réévaluations stables avant une baisse', 'Un retour sous un seuil doit rester stable pendant ce nombre de réévaluations (§6.4). Les hausses graves ne sont jamais retardées.', 'réévaluations', 2, 1, 6, 1, 'Baisses de palier'),
+  TH('weak_signal_expiry_h', 'Expiration d’un signal faible', 'Durée avant qu’un signal faible n’expire. Le plan demande une durée versionnée sans la fixer : 168 h est le défaut de la maquette. L’expiration n’établit pas le retour à la normale.', 'heures', 168, 24, 720, 24, 'Paliers 10 et 25'),
+  TH('coverage_families', 'Familles obligatoires pour autoriser le palier 0', 'Profil de couverture du pilote (§6.4) : en dessous, l’indice est « non calculable », jamais 0.', 'familles', 3, 3, 6, 1, 'Palier 0 / état non calculable'),
+  TH('baseline_weeks', 'Référence minimale', 'Semaines comparables nécessaires avant de conclure à une anomalie ; sinon « référence insuffisante » (§5).', 'semaines', 8, 4, 12, 1, 'Détection d’anomalie'),
+];
+
+function thresholds(scn: string): ThresholdsState {
+  const items = PLAN_THRESHOLDS.map((x) => ({ ...x }));
+  if (scn !== 'seuils') return { policy_version: 'seuils-v1', items, history: [] };
+  const set = (k: string, v: number) => (items.find((x) => x.key === k)!.value = v);
+  set('anomaly_mad_k', 2.5);
+  set('downgrade_evals', 1);
+  const history: ThresholdChange[] = [
+    { id: 'T-2', at: t(2 * 24), kind: 'modification', key: 'downgrade_evals', label: 'Réévaluations stables avant une baisse', from: 2, to: 1, reason: 'Essai : réduire les oscillations constatées sur la mesure Internet.', actor: 'David', policy_version: 'seuils-v3' },
+    { id: 'T-1', at: t(5 * 24), kind: 'modification', key: 'anomaly_mad_k', label: 'Écart de détection d’anomalie', from: 3, to: 2.5, reason: 'Essai : détecter plus tôt les chutes de connectivité.', actor: 'David', policy_version: 'seuils-v2' },
+  ];
+  return { policy_version: 'seuils-v3', items, history };
+}
+
+const NOTIFICATIONS: NotificationSettings = { enabled: true, level: 'officiel_a3', channel: 'telegram', channel_state: 'non_active' };
 
 /* ---------- Historique en escalier ---------- */
 
@@ -198,7 +250,7 @@ function gaugeBase(over: Partial<GaugeState>): GaugeState {
     as_of: t(0.1),
     trend_24h: { direction: 'hausse', from: 25, to: 40 },
     trend_7d: { direction: 'hausse', from: 10, to: 40 },
-    policy: { version: 'echelle-v1.2', label: 'Échelle de situation, règles v1.2' },
+    policy: { version: 'echelle-v1.2', label: 'Échelle de situation, règles v1.2', plan_version: 'echelle-v1.2' },
     ...over,
   };
 }
@@ -208,7 +260,7 @@ function coverage(over: Partial<Coverage> = {}): Coverage {
     profile_satisfied: true,
     profile_label: 'Profil France — pilote',
     families: [
-      { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '4 sources sur 4 à jour' },
+      { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '3 sources sur 4 à jour (1 bloquée, secours actif)' },
       { id: 'faits', label: 'Faits régionaux corroborables', state: 'ok', detail: '2 sources sur 2 à jour' },
       { id: 'technique', label: 'Mesure technique', state: 'ok', detail: 'IODA à jour ; aviation en retard (secours)' },
     ],
@@ -309,7 +361,7 @@ export function buildSnapshot(scenarioId: string): Snapshot {
       cov = coverage({
         profile_satisfied: false,
         families: [
-          { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '4 sources sur 4 à jour' },
+          { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '3 sources sur 4 à jour (1 bloquée, secours actif)' },
           { id: 'faits', label: 'Faits régionaux corroborables', state: 'ok', detail: '2 sources sur 2 à jour' },
           { id: 'technique', label: 'Mesure technique', state: 'indisponible', detail: 'IODA et agrégat aviation indisponibles — aucun secours' },
         ],
@@ -387,6 +439,15 @@ export function buildSnapshot(scenarioId: string): Snapshot {
       extraJournal = [{ id: 'J-14', at: t(3 * 24), kind: 'methode', text: 'Changement de méthode echelle-v1.1 → v1.2. Tendance suspendue : une nouvelle pondération n’est pas une dégradation réelle.', simulated: false }];
       break;
     }
+    case 'seuils': {
+      g = gaugeBase({ trend_7d: { direction: 'non_comparable', from: null, to: null, reason: 'seuils modifiés il y a 2 jours' } });
+      conclusion = { ...CONCLUSION_BASE, trend: { period: '7 jours', direction: 'non_comparable' } };
+      extraJournal = [
+        { id: 'J-15', at: t(2 * 24), kind: 'methode', text: 'Seuil « Réévaluations stables avant une baisse » : 2 → 1 (seuils-v3). Historique moins comparable.', simulated: false },
+        { id: 'J-16', at: t(5 * 24), kind: 'methode', text: 'Seuil « Écart de détection d’anomalie » : 3 → 2,5 (seuils-v2). Historique moins comparable.', simulated: false },
+      ];
+      break;
+    }
     case 'partielle': {
       events = [GRAVE_EVENT, ...BASE_EVENTS.filter((e) => ['EV-003', 'EV-004', 'EV-008', 'EV-009', 'EV-010', 'EV-011', 'EV-012'].includes(e.id))];
       g = gaugeBase({
@@ -411,7 +472,7 @@ export function buildSnapshot(scenarioId: string): Snapshot {
       cov = coverage({
         profile_satisfied: false,
         families: [
-          { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '4 sources sur 4 à jour' },
+          { id: 'autorites', label: 'Autorités / mesures', state: 'ok', detail: '3 sources sur 4 à jour (1 bloquée, secours actif)' },
           { id: 'faits', label: 'Faits régionaux corroborables', state: 'degrade', detail: '1 source sur 2 à jour' },
           { id: 'technique', label: 'Mesure technique', state: 'indisponible', detail: 'Collecteur IODA en panne, sans rapport avec le fait' },
         ],
@@ -439,6 +500,8 @@ export function buildSnapshot(scenarioId: string): Snapshot {
     civil_alert: civil,
     nuclear,
     ai: scn === 'ambigu' ? { ...AI, previous_runs: [] } : AI,
+    thresholds: thresholds(scn),
+    notifications: { ...NOTIFICATIONS },
     demo: true,
   };
 }

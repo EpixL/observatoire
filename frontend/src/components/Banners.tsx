@@ -6,7 +6,7 @@ export function DemoBar({ scenario, onScenario }: { scenario: string; onScenario
   return (
     <div className="demo-bar" role="region" aria-label="Mode maquette">
       <strong>Données fictives — maquette</strong>
-      <span className="muted">Aucune notification réelle, aucun appel IA, aucune requête externe.</span>
+      <span>Aucune notification réelle, aucun appel IA, aucune requête externe.</span>
       <label>
         <span>Scénario de démonstration</span>
         <select value={scenario} onChange={(e) => onScenario(e.target.value)} data-testid="scenario-select">

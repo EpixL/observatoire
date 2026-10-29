@@ -24,6 +24,7 @@ for (const w of [320, 390, 768, 1440]) {
 }
 
 const STATES: [string, string][] = [
+  ['seuils', 'seuils-modifies'],
   ['indisponible', 'donnees-indisponibles'],
   ['ambigu', 'situation-ambigue'],
   ['civile', 'alerte-civile'],
@@ -40,6 +41,35 @@ for (const [id, name] of STATES) {
       await page.screenshot({ path: `${OUT}etat-${name}-${w}.png`, fullPage: w < 1100 ? false : false });
     });
   }
+}
+
+// Écrans Réglages : au moins mobile + ordinateur pour chacun.
+const SETTINGS: [string, string, string][] = [
+  ['general', 'nominal', 'reglages-general'],
+  ['sources', 'indisponible', 'reglages-etat-des-sources'],
+  ['notifications', 'nominal', 'reglages-notifications'],
+  ['seuils', 'seuils', 'reglages-seuils'],
+];
+for (const w of [390, 1440]) {
+  for (const [section, scenario, name] of SETTINGS) {
+    test(`réglages ${section} ${w}px`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
+      await open(page, scenario, `reglages/${section}`, 'dark');
+      await page.addStyleTag({ content: FLAT });
+      await page.screenshot({ path: `${OUT}${name}-${w}.png`, fullPage: true });
+    });
+  }
+  test(`réglages seuils : confirmation ${w}px`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
+    await open(page, 'nominal', 'reglages/seuils', 'dark');
+    await page.getByTestId('thr-anomaly_mad_k').fill('9');
+    await page.screenshot({ path: `${OUT}reglages-seuils-garde-fou-limite-${w}.png` });
+    await page.getByTestId('thr-anomaly_mad_k').fill('2.5');
+    await page.getByTestId('thr-save').click();
+    await page.getByTestId('thr-reason').fill('Essai de détection plus précoce des chutes de connectivité');
+    await page.getByTestId('thr-ack').check();
+    await page.screenshot({ path: `${OUT}reglages-seuils-confirmation-${w}.png` });
+  });
 }
 
 test('captures carte, outre-mer, dialogues, autres pages', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AiMode, Snapshot, VeilleEvent } from './types';
+import type { AiMode, NotificationSettings, Snapshot, ThresholdsState, VeilleEvent } from './types';
 import { dataClient, isMock } from './api/client';
 import { ago } from './lib/format';
 import { DEFAULT_FILTERS, applyFilters, type Filters } from './lib/filters';
@@ -14,7 +14,8 @@ import { History } from './components/History';
 import { Dossiers } from './components/Dossiers';
 import { AiDialog } from './components/AiDialog';
 import { Journal, Sources } from './components/Registry';
-import { Settings, type Theme } from './components/Settings';
+import { Reglages, SECTIONS, type Section, type Theme } from './components/Reglages';
+import { adjustGauge, modifiedItems } from './lib/thresholds';
 import { useMedia } from './hooks/useMedia';
 
 const ROUTES = [
@@ -24,31 +25,36 @@ const ROUTES = [
   { id: 'sources', label: 'Sources', short: 'Sources' },
   { id: 'journal', label: 'Journal', short: 'Journal' },
 ] as const;
-type RouteId = (typeof ROUTES)[number]['id'];
+type RouteId = (typeof ROUTES)[number]['id'] | 'reglages';
 
-function readRoute(): RouteId {
-  const h = window.location.hash.replace(/^#\/?/, '');
-  return (ROUTES.find((r) => r.id === h)?.id ?? 'vue') as RouteId;
+function readRoute(): { route: RouteId; section: Section } {
+  const [h, sub] = window.location.hash.replace(/^#\/?/, '').split('/');
+  const section = (SECTIONS.find((x) => x.id === sub)?.id ?? 'general') as Section;
+  if (h === 'reglages') return { route: 'reglages', section };
+  return { route: (ROUTES.find((r) => r.id === h)?.id ?? 'vue') as RouteId, section };
 }
 function readScenario(): string {
   return new URLSearchParams(window.location.search).get('scenario') ?? 'nominal';
 }
+/** Bleu nuit TOUJOURS par défaut, quel que soit le réglage du système ; seul un choix manuel « clair » est mémorisé. */
 function readTheme(): Theme {
   try {
-    const t = window.localStorage.getItem('veille-theme');
-    if (t === 'dark' || t === 'light' || t === 'auto') return t;
+    if (window.localStorage.getItem('veille-theme') === 'light') return 'light';
   } catch {
-    /* stockage indisponible : on reste en automatique */
+    /* stockage indisponible : thème sombre */
   }
-  return 'auto';
+  return 'dark';
 }
 
 export default function App() {
   const [scenario, setScenario] = useState(readScenario);
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [route, setRoute] = useState<RouteId>(readRoute);
+  const [loc, setLoc] = useState(readRoute);
+  const { route, section } = loc;
+  const [thr, setThr] = useState<ThresholdsState | null>(null);
+  const [notif, setNotif] = useState<NotificationSettings | null>(null);
   const [theme, setTheme] = useState<Theme>(readTheme);
-  const [view, setView] = useState<MapViewId>('france');
+  const [view, setView] = useState<MapViewId>('europe');
   const [overseas, setOverseas] = useState(false);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -57,21 +63,25 @@ export default function App() {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiDone, setAiDone] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode | null>(null);
   const [budgetOut, setBudgetOut] = useState<boolean | null>(null);
   const [streamOn, setStreamOn] = useState(false);
   const wide = useMedia('(min-width: 1100px)');
 
   useEffect(() => {
-    const on = () => setRoute(readRoute());
+    const on = () => setLoc(readRoute());
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
 
   useEffect(() => {
     let live = true;
-    dataClient.load(scenario).then((s) => live && setSnap(s));
+    dataClient.load(scenario).then((s) => {
+      if (!live) return;
+      setSnap(s);
+      setThr(s.thresholds);
+      setNotif(s.notifications);
+    });
     const off = dataClient.subscribe(
       (m) => {
         if (m.type === 'snapshot') setSnap(m.data);
@@ -86,8 +96,7 @@ export default function App() {
 
   useEffect(() => {
     const el = document.documentElement;
-    if (theme === 'auto') el.removeAttribute('data-theme');
-    else el.setAttribute('data-theme', theme);
+    el.setAttribute('data-theme', theme);
     try {
       window.localStorage.setItem('veille-theme', theme);
     } catch {
@@ -105,7 +114,7 @@ export default function App() {
   }, []);
 
   const select = useCallback((id: string) => setSelectedId(id), []);
-  const go = (r: RouteId) => {
+  const go = (r: string) => {
     window.location.hash = `/${r}`;
   };
 
@@ -113,12 +122,20 @@ export default function App() {
   const visible = useMemo(() => (snap ? applyFilters(snap.events, filters, snap.as_of) : []), [snap, filters]);
   const selected: VeilleEvent | null = selectedId ? (eventsById[selectedId] ?? null) : null;
 
-  if (!snap) return <p style={{ padding: 16 }}>Chargement de la maquette…</p>;
+  if (!snap || !thr || !notif) return <p style={{ padding: 16 }}>Chargement de la maquette…</p>;
 
   const ai = { ...snap.ai, mode: aiMode ?? snap.ai.mode, budget_exhausted: budgetOut ?? snap.ai.budget_exhausted };
+  const saveThresholds = (changes: { key: string; to: number }[], reason: string) => void dataClient.saveThresholds(thr, changes, reason).then(setThr);
+  const resetThresholds = (reason: string) => void dataClient.resetThresholds(thr, reason).then(setThr);
+  const saveNotifications = (n: NotificationSettings) => {
+    setNotif(n);
+    void dataClient.saveNotifications(n);
+  };
+  const gauge = adjustGauge(snap.gauge, thr.history, snap.as_of);
+  const nModified = modifiedItems(thr.items).length;
   const okSources = snap.sources.filter((s) => s.state === 'ok').length;
   const offView = !!selected && !isInView(selected, view, overseas);
-  const nonCalc = snap.gauge.status === 'non_calculable';
+  const nonCalc = gauge.status === 'non_calculable';
   const modeLabel = { desactivee: 'IA désactivée', a_la_demande: 'IA à la demande', automatique: 'IA automatique' }[ai.mode];
 
   const openDossier = (id: string) => {
@@ -177,7 +194,7 @@ export default function App() {
           </div>
           <div className="zone">
             <small>Territoire évalué</small>
-            <strong>{snap.gauge.territory.label}</strong>
+            <strong>{gauge.territory.label}</strong>
           </div>
           <div className="status" aria-label="État du système">
             <span className={`chip ${okSources === snap.sources.length ? 'ok' : 'watch'}`} data-testid="src-state">
@@ -195,9 +212,9 @@ export default function App() {
             </span>
           </div>
           <div className="actions">
-            <button type="button" className="btn" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" data-testid="settings-btn">
+            <a className="btn" href="#/reglages/general" aria-current={route === 'reglages' ? 'page' : undefined} data-testid="settings-btn">
               Réglages
-            </button>
+            </a>
           </div>
         </header>
 
@@ -220,7 +237,7 @@ export default function App() {
               <div className="overview">
                 <div className="col-left">
                   <div className="o-gauge panel">
-                    <Gauge gauge={snap.gauge} compact={!wide} onExplain={() => setScaleOpen(true)} />
+                    <Gauge gauge={gauge} compact={!wide} onExplain={() => setScaleOpen(true)} thresholdsModified={nModified} />
                   </div>
                   {snap.nuclear && (
                     <div className="o-nuc">
@@ -247,7 +264,7 @@ export default function App() {
                 </div>
               </div>
               <div className="below">
-                <History points={snap.history} changes={snap.method_changes} />
+                <History points={snap.history} changes={snap.method_changes} thresholdChanges={thr.history} />
                 <section className="panel" aria-labelledby="dos-sum">
                   <h2 id="dos-sum">Dossiers actifs</h2>
                   <ul className="dossier-list">
@@ -285,7 +302,7 @@ export default function App() {
               onDossier={setDossierId}
               ai={ai}
               onAi={() => setAiOpen(true)}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={() => go('reglages/general')}
               aiDone={aiDone}
               onSelectEvent={(id) => {
                 select(id);
@@ -295,14 +312,32 @@ export default function App() {
           )}
           {route === 'sources' && <Sources list={snap.sources} now={snap.as_of} />}
           {route === 'journal' && <Journal entries={snap.journal} />}
+          {route === 'reglages' && (
+            <Reglages
+              section={section}
+              now={snap.as_of}
+              theme={theme}
+              onTheme={setTheme}
+              aiMode={ai.mode}
+              onAiMode={setAiMode}
+              budgetOut={ai.budget_exhausted}
+              onBudgetOut={setBudgetOut}
+              sources={snap.sources}
+              notifications={notif}
+              onNotifications={saveNotifications}
+              thresholds={thr}
+              onSaveThresholds={saveThresholds}
+              onResetThresholds={resetThresholds}
+            />
+          )}
         </main>
 
         <footer className="footer">
-          VEILLE · maquette v0.1 · indice conventionnel, jamais une probabilité · aucun compte à rebours · {nonCalc ? 'indice courant non calculable' : `échelle ${snap.gauge.policy.version}`}
+          VEILLE · maquette v0.1 · indice conventionnel, jamais une probabilité · aucun compte à rebours · {nonCalc ? 'indice courant non calculable' : `échelle ${gauge.policy.version} · ${thr.policy_version}`}
         </footer>
       </div>
 
-      <ScaleDialog open={scaleOpen} onClose={() => setScaleOpen(false)} gauge={snap.gauge} />
+      <ScaleDialog open={scaleOpen} onClose={() => setScaleOpen(false)} gauge={gauge} thresholdsModified={nModified} />
       <AiDialog
         open={aiOpen}
         onClose={() => setAiOpen(false)}
@@ -312,16 +347,6 @@ export default function App() {
           setAiOpen(false);
           go('dossiers');
         }}
-      />
-      <Settings
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        theme={theme}
-        onTheme={setTheme}
-        aiMode={ai.mode}
-        onAiMode={setAiMode}
-        budgetOut={ai.budget_exhausted}
-        onBudgetOut={setBudgetOut}
       />
     </>
   );

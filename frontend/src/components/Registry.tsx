@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { JournalEntry, SourceRecord } from '../types';
 import { fmt } from '../lib/format';
 
-const STATE_LABEL = { ok: 'À jour', retard: 'En retard', indisponible: 'Indisponible' } as const;
+const STATE_LABEL = { ok: 'À jour', retard: 'En retard', indisponible: 'Indisponible', desactivee: 'Désactivée' } as const;
 const KIND = { mesure: 'Mesure', operateur: 'Opérateur', autorite: 'Autorité', media: 'Média' } as const;
 
 export function Sources({ list, now }: { list: SourceRecord[]; now: string }) {
@@ -15,7 +15,7 @@ export function Sources({ list, now }: { list: SourceRecord[]; now: string }) {
         États de connecteurs fictifs. Un flux indisponible reste visible ; aucune ancienne observation n’est présentée comme un flux en direct. Au {fmt(now)}.
       </p>
       <div className="filters" role="group" aria-label="Filtrer par état">
-        {(['tous', 'ok', 'retard', 'indisponible'] as const).map((k) => (
+        {(['tous', 'ok', 'retard', 'indisponible', 'desactivee'] as const).map((k) => (
           <button key={k} type="button" className="btn" aria-pressed={only === k} onClick={() => setOnly(k)}>
             {k === 'tous' ? `Tous (${list.length})` : `${STATE_LABEL[k]} (${list.filter((s) => s.state === k).length})`}
           </button>
@@ -28,8 +28,8 @@ export function Sources({ list, now }: { list: SourceRecord[]; now: string }) {
               {s.name} <span className="muted">— {s.organism}</span>
             </h3>
             <p>
-              <span className={`chip ${s.state === 'ok' ? 'ok' : s.state === 'retard' ? 'watch' : 'grave'}`}>
-                {s.state === 'ok' ? '●' : s.state === 'retard' ? '◐' : '○'} {STATE_LABEL[s.state]}
+              <span className={`chip ${s.state === 'ok' ? 'ok' : s.state === 'retard' ? 'watch' : s.state === 'indisponible' ? 'grave' : ''}`}>
+                {s.state === 'ok' ? '●' : s.state === 'retard' ? '◐' : s.state === 'indisponible' ? '○' : '–'} {STATE_LABEL[s.state]}
               </span>{' '}
               <span className="chip">{KIND[s.kind]}</span> <span className="chip">{s.family}</span>
             </p>
@@ -55,7 +55,7 @@ export function Sources({ list, now }: { list: SourceRecord[]; now: string }) {
   );
 }
 
-const J_KIND: Record<JournalEntry['kind'], string> = { palier: 'Palier', methode: 'Méthode', source: 'Source', evenement: 'Événement', notification: 'Notification', revue: 'Revue' };
+const J_KIND: Record<JournalEntry['kind'], string> = { palier: 'Palier', methode: 'Méthode / seuils', source: 'Source', evenement: 'Événement', notification: 'Notification', revue: 'Revue' };
 
 export function Journal({ entries }: { entries: JournalEntry[] }) {
   const [kind, setKind] = useState<'tous' | JournalEntry['kind']>('tous');

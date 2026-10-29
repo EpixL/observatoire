@@ -11,7 +11,7 @@ const EVIDENCE: Record<VeilleEvent['evidence_status'], string> = {
   non_corroboree: 'Non corroborée',
 };
 const EXCL: Record<ExclusionReason, string> = { doublon: 'Doublon', hors_perimetre: 'Hors périmètre', perime: 'Données périmées', preuve_insuffisante: 'Preuve insuffisante' };
-const PRECISION: Record<VeilleEvent['occurred_precision'], string> = { minute: 'à la minute', heure: 'à l’heure près', jour: 'au jour près', inconnue: 'date inconnue' };
+const PRECISION: Record<VeilleEvent['occurred_precision'], string> = { instant: 'horodatage précis', day: 'au jour près', month: 'au mois près', year: 'à l’année près', unknown: 'date inconnue' };
 const layerLabel = (id: string) => LAYERS.find((l) => l.id === id)!.label;
 
 export function StatusBadge({ e }: { e: VeilleEvent }) {
@@ -212,6 +212,18 @@ export function EventCard({ event: e, offView, onGoEurope, onOpenDossier }: Card
         </p>
       )}
 
+      {e.proposed_links.length > 0 && (
+        <>
+          <h4 className="subhead">Liens proposés (jamais une preuve)</h4>
+          <ul>
+            {e.proposed_links.map((l) => (
+              <li key={l.event_id}>
+                <b>{l.link_type === 'possible_common_cause' ? 'Cause commune possible' : 'Doublon possible'}</b> avec <span className="mono">{l.event_id}</span> — {l.reason}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {e.hypotheses.length > 0 && (
         <>
           <h4 className="subhead">Hypothèses compatibles</h4>
