@@ -12,8 +12,12 @@ const B = 30;
 
 export function History({ points, changes, thresholdChanges = [] }: { points: HistoryPoint[]; changes: MethodChange[]; thresholdChanges?: ThresholdChange[] }) {
   const markers = [
-    ...changes.map((c) => ({ at: c.at, label: `Méthode ${c.from_version.replace('echelle-', '')} → ${c.to_version.replace('echelle-', '')}` })),
-    ...[...new Map(thresholdChanges.map((c) => [c.policy_version, c])).values()].map((c) => ({ at: c.at, label: `Seuils ${c.policy_version.replace('seuils-', '')}` })),
+    // changements de version relevés par le serveur dans l'historique de la jauge
+    ...changes.map((c) => ({ at: c.at, label: `Seuils ${c.from_version.replace('seuils-', '')} → ${c.to_version.replace('seuils-', '')}` })),
+    // changements enregistrés pendant cette session (maquette) et pas encore dans l'historique de la jauge
+    ...[...new Map(thresholdChanges.map((c) => [c.policy_version, c])).values()]
+      .filter((c) => !changes.some((m) => m.to_version === c.policy_version))
+      .map((c) => ({ at: c.at, label: `Seuils ${c.policy_version.replace('seuils-', '')}` })),
   ];
   const t0 = Date.parse(points[0].at);
   const t1 = Date.parse(points[points.length - 1].at);

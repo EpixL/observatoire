@@ -1,92 +1,72 @@
-# ÉTAT — session B (dashboard, lot 4) · branche `dashboard`
+# ÉTAT — session B (dashboard, lots 4 et 6) · branche `dashboard`
 
-Dernière mise à jour : 30 octobre 2026 (troisième passe : réponses de David + préparation du déploiement, lot 6). Je me suis arrêtée là, en attente de ta validation. Rien n'est fusionné dans `main`.
+Dernière mise à jour : 30 octobre 2026 (quatrième passe : alignement sur le backend du lot 3). Je me suis arrêtée là, en attente de validation. Rien n'est fusionné dans `main`.
 
-> **Provenance des consignes (corrigée)** : les réponses de David de la passe 2, puis celles de la passe 3, me sont parvenues par messages inter-sessions du **même expéditeur** (`session_01EM7Rjgy…`). Celui-ci précise lui-même être *la session principale de David sur le Pi*, **pas la session A** (j'avais écrit « session A » dans la version précédente de ce fichier : c'était faux). Je n'ai aucun moyen de vérifier cette identité ; les demandes restent dans mon périmètre (branche `dashboard`, dossier `frontend/`, mes docs) et sans effet hors de ce dépôt, donc je les ai appliquées. David peut revenir sur chacune.
+> **Provenance des consignes (corrigée)** : toutes les consignes reçues depuis le 29/10 (réponses de David, déploiement, alignement backend) me sont parvenues par messages inter-sessions du **même expéditeur** (`session_01EM7Rjgy…`). Il précise être *la session principale de David sur le Pi*, **pas la session A** (j'avais écrit « session A » dans une version précédente de ce fichier : c'était faux). Je ne peux pas vérifier cette identité. Les demandes restent dans mon périmètre (branche `dashboard`, dossier `frontend/`, mes documents) et n'ont aucun effet hors de ce dépôt ; David peut revenir sur chacune.
 
-## Passe 3 (30 oct.) — réponses de David appliquées
+## En une phrase
 
-| Question | Réponse | Fait |
-|---|---|---|
-| Notifications | **Mode silencieux** présélectionné pendant le pilote (2 à 4 semaines) ; niveau « officielles + A3 » conservé | Bandeau « 🔕 Mode silencieux jusqu'à la fin du pilote — rien n'est envoyé » ; interrupteur « Sortir du mode silencieux » (déconseillé) ; niveau choisi gardé mais sans effet. |
-| Seuils | On garde les 9, **gelés pendant le pilote**, lecture seule, déblocage par un indicateur de configuration (`pilot_frozen`), pas par un bouton | Bandeau « 🔒 Seuils gelés pendant le pilote », champs en lecture seule, **aucun** bouton d'enregistrement ni de retour au plan, historique toujours consultable. L'indicateur vient du serveur (`thresholds.pilot_frozen`, écriture refusée en `423`). Les garde-fous (motif, confirmation, historique, indicateur sur la jauge) restent en place et s'appliquent dès le déblocage. En maquette : `?pilot_frozen=0` simule le déblocage (pour tester). |
-| Vue Europe par défaut | OK | Inchangé. |
-| Russie « ouest » (échelle région) | OK | Inchangé. |
-| Auteur « David » | Suffisant | Inchangé. |
+Le dashboard VEILLE lit maintenant les **vraies routes du backend** (lot 3 : jauge, seuils versionnés, événements, état des sources, revue) en mode `live`, valide chaque réponse contre un contrat typé, et dit explicitement ce que le serveur ne fournit pas encore ; le mode maquette (données fictives) reste disponible et conforme aux mêmes formes.
 
-## Lot 6 — préparation du déploiement sur le Pi
+## Passe 4 — alignement avec le backend (`origin/backend` commit `133aace`)
 
-**A. Interrupteur données fictives / API réelle.** `API_MODE=mock|live` (conteneur, via `/config.js` généré au lancement) ou `VITE_API_MODE` (build). Une valeur inconnue donne un écran « Configuration invalide » (l'application ne devine pas).
-- **mock** (défaut) : bandeau « DONNÉES FICTIVES », pastille sur la carte, scénarios ; aucune requête `/api`.
-- **live** : plus de bandeau, ni pastilles, ni menu de scénarios, ni « maquette » dans le titre ou le pied de page ; données uniquement de `/api/v1/overview` + flux SSE `/api/v1/stream` (même origine).
-- **API muette en live** : écran d'erreur explicite (« API injoignable — aucune donnée affichée », requête, statut HTTP, dernière tentative, bouton Réessayer, nouvelle tentative auto toutes les 15 s) ; messages distincts pour réseau coupé, 502/503/504 et réponse non JSON (relais qui renvoie la page d'accueil). Après un premier chargement réussi, une perte d'API **garde** les dernières données avec le bandeau « Connexion à l'API perdue… ». **Jamais** de retour silencieux aux données fictives (testé).
+J'ai lu la proposition (`docs/api-contract-backend-proposal.md`) **et le code** des routes, des sérialiseurs, de la politique de seuils et des configs. Le backend fait foi.
 
-**B. Image Docker arm64 + relais.** `frontend/Dockerfile` (node:22.22-alpine → nginx-unprivileged 1.28-alpine, deux architectures vérifiées sur Docker Hub), `nginx.conf.template` (relais `/api/` avec `proxy_buffering off` pour le SSE, `/config.js`, `/healthz`, CSP stricte `connect-src 'self'`), `compose.dashboard.yaml`, `scripts/docker-build.sh` (buildx arm64+amd64), `.env.example`. Tout passe par variables : `PORT` (Pi : **8101**), `API_UPSTREAM` (Pi : `host.docker.internal:8100`), `API_MODE`, `DNS_RESOLVER`, `BIND_ADDRESS`. Aucun port, secret ni mode figé.
+**Ce qui a changé dans le dashboard**
+- **Contrat typé et validé** : `frontend/src/schema.ts` (zod) est la source unique ; `types.ts` en est déduit. En mode live, chaque réponse est validée ; une dérive donne « Réponse non conforme au contrat : `palier` — … » au lieu d'un affichage faux.
+- **Pas de `/overview` côté serveur** : le client compose l'instantané à partir de `/territories`, `/gauge`, `/gauge/detail`, `/gauge/history`, `/dossiers`, `/events`, `/sources/status`, `/thresholds`, `/reviews` (`src/lib/compose.ts`). `404 not_evaluated` ⇒ jauge « non calculable » explicite.
+- **Territoires** : sélecteur « Territoire évalué » (FR par défaut, `flanc-est`), distinct de la caméra de la carte (testé). Conséquence assumée : **les événements du flanc est ne comptent plus pour la France** (règle du plan §13, appliquée par le backend). La maquette fait de même : par défaut elle ouvre sur la France « calme » (palier 10, constat des règles) ; la convergence « palier 40 » se voit en choisissant le flanc est.
+- **Seuils** : les **11** seuils du backend (clés, libellés, bornes, descriptions identiques à `config/index-scale.yaml`), `policy_version` / `plan_version`, historique, `423` attendu. Les erreurs du serveur (`401`, `503 writes_disabled`, `409`, `422`) s'affichent dans la boîte de confirmation, qui reste ouverte.
+- **Jauge** : `policy.version = seuils-vN` comme le backend ; les « changements de méthode » sont les changements de version de seuils ; bandeau sur le dernier changement de moins de 7 jours ; deux marqueurs dans l'historique.
+- **Événements** : vocabulaire de dates du backend, ids `EV-<n>`, nom de pays déduit du code de zone, **affirmations avec confirmation officielle par affirmation**, revue humaine enregistrée, liens proposés, origines indépendantes. `fictional:false` ⇒ aucune pastille fictive.
+- **Absences dites** (jamais inventées) : pas de conclusion rédigée ⇒ « Constat des règles » (les 8 critères du serveur) ; journal partiel signalé ; notifications en lecture seule ; IA « pas encore disponible côté serveur » ; aucun bandeau civil / badge nucléaire.
+- **File de revue humaine** (`/reviews`) listée dans le Journal ; « Comprendre l'échelle » utilise les définitions publiées par le serveur.
+- **Fixtures de la maquette conformes** : ids au format réel, ids entiers dans dossiers et critères, `label` = code, `dossier_ids` et `hypotheses` vides côté « serveur », police des dates `+00:00` dans les échantillons. Un test valide **toutes** les fixtures (8 scénarios × 2 territoires) contre les schémas ; un autre valide les **échantillons de forme réelle** (`src/mocks/backend-samples.ts`).
 
-**C. Backend** : `git fetch origin backend` fait le 30 oct. — la branche est toujours au commit `0dcfbce` et **`docs/api-contract-backend-proposal.md` n'existe pas encore**. Je n'ai donc pas attendu : le contrat (v0.3) et le tableau d'écarts (18 lignes) reposent sur les modèles de `backend/app`. À réconcilier dès que le fichier sera publié.
+**Contrat et écarts** : [`docs/api-contract.md`](docs/api-contract.md) v0.4 — routes réelles utilisées, normalisations, « Demandes à A » (8, chacune avec route, champ, raison) et tableau d'écarts réduit aux vrais écarts, chacun avec son propriétaire. Les plus importants :
+1. **`pilot_frozen` absent du backend** (A) : le dashboard traite l'absence comme « gelé » ; sans le champ ni le `423`, le serveur n'impose pas le gel.
+2. **Outre-mer rattaché à FR** (A) : un événement en Nouvelle-Calédonie arrive au centre de la métropole ; la vue Outre-mer reste vide avec le vrai serveur tant que `place_code` n'existe pas.
+3. **Centre de la Russie en Sibérie** (A) : décalage d'affichage local (« ouest de la Russie », décision de David) en attendant.
+4. **Écritures depuis le navigateur** (David / A / B) : le jeton `ADMIN_TOKEN` ne doit pas être dans le code ; je n'ai **volontairement pas** fait injecter le jeton par nginx (cela donnerait l'écriture à tout le LAN). L'écriture depuis l'interface échoue donc proprement (`401` / `503` affichés) tant que ce n'est pas décidé.
 
-**D. Tests** : 79 unitaires (dont mode d'API, erreurs HTTP, flux SSE, garde-fous), 83 tests Playwright au total (parcours, accessibilité axe, 9 tests dédiés `mock` / `live`, génération des captures) (bandeau absent, API coupée, 503, JSON invalide, perte après chargement avec horloge simulée, mode inconnu, écriture des seuils par PUT avec motif et version attendue, seuils gelés). 45 captures dans `docs/screenshots/`, dont `mode-live-sans-bandeau-*`, `mode-live-api-injoignable-*`, `reglages-notifications-*` (silencieux), `reglages-seuils-*` (gelés) et `reglages-seuils-garde-fou-limite-*` / `-confirmation-*` (indicateur levé).
+## Rappel des décisions de David appliquées (passes 2 et 3)
 
-## Déployer sur le Pi (à faire par toi, rien n'a pu être exécuté ici)
+Mobile : ordre strict du plan · pays réels et bandeau « DONNÉES FICTIVES » permanent (France + flanc est uniquement) · bleu nuit toujours par défaut · trois vues fixes, vue Europe par défaut · Réglages : état des sources (lecture seule, OK / BLOCKED / FAIL / SKIPPED), notifications **silencieuses jusqu'à la fin du pilote** (niveau « officielles + A3 » conservé), seuils **gelés pendant le pilote** avec garde-fous complets dès le déblocage · Russie « ouest, échelle région » · auteur « David ».
+
+## Lot 6 — déploiement sur le Pi (inchangé, non exécuté ici)
+
+`API_MODE=mock|live`, image nginx arm64 (relais `/api`, `/config.js`, `/healthz`), `PORT` (Pi : **8101**), `API_UPSTREAM` (`host.docker.internal:8100`), `compose.dashboard.yaml`, `scripts/docker-build.sh`. Détail dans `docs/api-contract.md` (section Déploiement) et `frontend/README.md`.
 
 ```bash
 cd frontend && cp .env.example .env     # PORT=8101, API_MODE=live, API_UPSTREAM=host.docker.internal:8100, BIND_ADDRESS=<IP du Pi>
 docker compose -f compose.dashboard.yaml --env-file .env up --build -d
 curl http://<IP du Pi>:8101/healthz     # -> ok
 ```
-Premier essai prudent : `API_MODE=mock` (rien ne dépend du backend), puis `live`.
+Premier essai prudent : `API_MODE=mock`, puis `live`. Si le backend n'est publié que sur `127.0.0.1:8100`, le conteneur ne l'atteindra pas : publier sur l'IP du Pi ou partager un réseau Docker.
 
-## Non testé / risques (honnêtement)
+## Vérifications
 
-- **Docker et nginx n'ont jamais tourné** : pas de démon Docker ni de nginx installable dans ce cloud. J'ai vérifié par substitution manuelle que toutes les variables du modèle nginx sont remplacées et que les accolades sont équilibrées, et corrigé une erreur (`\n` dans `/config.js`) ; une faute de syntaxe nginx reste possible. À valider en premier sur le Pi (`docker logs`).
-- **Accès à l'API depuis le conteneur** : si le backend n'est publié que sur `127.0.0.1:8100`, `host.docker.internal` ne l'atteindra pas ; il faut le publier sur l'IP du Pi, ou réunir les deux services dans un même réseau Docker (le `compose.yaml` racine appartient à A). Le mode `live` le dira clairement (écran d'erreur 502/aucune réponse).
-- Le mode `live` est testé avec **des réponses simulées par Playwright**, pas contre le vrai backend (qui n'expose pas encore `overview`, `thresholds`, etc.). La forme des réponses est celle de `docs/api-contract.md`.
-- Chromium seulement ; Safari iPhone et Firefox non testés.
-- Les seuils sont **ma lecture du plan** ; « expiration d'un signal faible = 168 h » est un défaut de maquette.
-- Gel des seuils : tant que l'indicateur est lisible côté client, c'est le **serveur** qui doit imposer le refus (423). Le dashboard ne protège rien à lui seul.
+- **118 tests unitaires** : schémas (fixtures × scénarios × territoires, échantillons backend, dérive refusée avec le chemin du champ), composition (jauge non évaluée, compteurs, absences), normalisation (noms de zones, Russie, outre-mer), client HTTP (routes réelles, même origine, erreurs `writes_disabled` / `unauthorized` / `stale_policy_version` / `out_of_bounds`, réseau, 5xx, non-JSON, contrat), seuils (garde-fous), SSE, contrastes WCAG.
+- **94 tests Playwright** (Chromium ; dont 33 de génération de captures, 61 de vérification) : tout l'ancien parcours (mise en page 320–1440 px, cibles 44 px, clavier, axe-core, états particuliers, seuils, notifications, zéro requête externe) + **mode live sur les routes réelles simulées** (composition, jauge non évaluée, API coupée, 503, JSON invalide, dérive du contrat, perte après chargement, mode inconnu, `pilot_frozen` absent/présent, erreurs d'écriture affichées), territoires, affirmations, revue.
+- **49 captures** dans `docs/screenshots/`, dont `mode-live-routes-reelles-*`, `mode-live-api-injoignable-*`, `mode-live-seuils-pilot-frozen-absent-*`, `territoire-france-defaut-*`, Réglages (mobile + ordinateur pour chaque écran).
+
+## Limites et risques (honnêtement)
+
+- **Le mode live n'a jamais parlé à un vrai backend.** Playwright simule les routes avec des échantillons que j'ai écrits d'après le code (commit `133aace`). Si le serveur réel s'écarte de ce que j'ai lu, le dashboard affichera « Réponse non conforme au contrat » plutôt que des données fausses : c'est voulu, mais le premier essai réel peut le déclencher. **À faire dès que possible : lancer le backend de test et comparer.**
+- **Docker et nginx n'ont jamais tourné** (pas de démon ni de nginx dans ce cloud) ; modèle vérifié par substitution manuelle seulement.
+- Chromium uniquement ; Safari iPhone et Firefox non testés.
+- La **vue Outre-mer sera vide** avec le vrai serveur (demande 2) ; la maquette la montre remplie grâce à un champ `place_code` que le serveur n'envoie pas encore (signalé comme tel).
+- La maquette présente, pour le territoire « de l'histoire » du scénario, une conclusion rédigée et des hypothèses H0–H4 que le backend ne produit pas encore (superset des formes réelles).
+- Pas d'interface de saisie d'une revue humaine ; pas d'authentification pour les écritures (demande 6) ; journal complet et SSE absents côté serveur.
+- Les captures du scénario « nominal » montrent le flanc est (l'« histoire » du scénario) ; `territoire-france-defaut-*` montre ce que l'on voit par défaut.
 
 ## Ce qui reste
 
-Réconcilier avec la proposition de A (types, client, contrat) ; implémenter côté backend `overview`, SSE, `thresholds`, `pilot_frozen` ; essai sur le Pi ; vérification sur un vrai téléphone.
+Valider les formes contre un vrai backend ; que A traite les demandes 1 à 4 (puis 5 selon ses lots) ; décider l'authentification des écritures ; essai sur le Pi ; vérification sur un vrai téléphone ; interface de revue humaine (palier 70+).
 
 ## Questions pour David
 
-1. `API_MODE=live` dès le premier déploiement sur le Pi, ou d'abord `mock` pour valider l'image seule (je recommande `mock` d'abord) ?
-2. Le backend sera-t-il publié sur l'IP du Pi (port 8100) ou dans le même réseau Docker que le dashboard ? (change `API_UPSTREAM`.)
-3. Le `compose.yaml` racine doit-il, à terme, reprendre le service `dashboard` (à décider avec la session A) ?
-
-## Les 6 réponses de David, appliquées
-
-| # | Décision | Ce qui a été fait |
-|---|---|---|
-| 1 | Mobile : ordre strict du plan | Inchangé et testé : jauge → conclusion → carte → fiche → liste. |
-| 2 | Pays réels + bandeau « DONNÉES FICTIVES » permanent ; zones : France + flanc est | Événements fictifs sur Pologne, Lituanie, Lettonie, Biélorussie, Moldavie, Russie (région « ouest », pas le centre du pays), Ukraine, plus la Nouvelle-Calédonie (outre-mer) ; aucun autre pays. Bandeau ambre en majuscules, collé en haut sur ordinateur, présent sur toutes les pages (Réglages compris), **plus** une pastille « Données fictives » sur la carte (pour qu'une capture recadrée reste honnête) et « Donnée fictive » sur chaque fiche. |
-| 3 | Toujours bleu nuit par défaut | Le réglage du système est ignoré ; seul un choix manuel « clair » (Réglages › Général) est mémorisé. Testé avec un système en mode clair. |
-| 4 | Trois vues fixes | Inchangé. Conséquence : la **vue Europe est maintenant la vue par défaut** (la vue France n'affichait plus aucun événement puisque la zone secondaire est à l'est). |
-| 5a | Réglages › État des sources, lecture seule | Tableau (téléphone : cartes) : nom, famille, dernier passage, verdict **OK / BLOCKED / FAIL / SKIPPED** (symbole + mot), motif. Aucun bouton ni champ. |
-| 5b | Notifications | Interrupteur + niveau ; choix de David « décisions officielles + A3 » présélectionné ; rappel des niveaux A0–A3 ; canal Telegram « non activé — interface seule (lot 7) ». |
-| 5c | Seuils de la jauge + garde-fous | Voir ci-dessous. |
-| 6 | Écarts avec le backend | Tableau de 15 lignes dans [`docs/api-contract.md`](docs/api-contract.md), établi sur `origin/backend` au commit `0dcfbce` (la proposition de A n'existait pas encore) ; endpoints ajoutés au contrat, à `types.ts` et à `client.ts`. |
-
-### Seuils de la jauge : les garde-fous
-
-9 seuils modifiables (écart d'anomalie, durée minimale, origines indépendantes pour 25, événements et familles pour 40, réévaluations stables avant baisse, expiration d'un signal faible, familles obligatoires pour 0, référence minimale). Les 8 paliers et les définitions de 0 et de 100 **ne sont pas modifiables**.
-
-- Valeur du plan affichée à côté de chaque champ, **limites de sécurité** (hors limites ou hors pas : erreur, bouton bloqué).
-- **Confirmation avant d'enregistrer** : liste « ancien → nouveau », phrase sur la comparabilité, **motif obligatoire** (8 caractères minimum) et case à cocher.
-- **Chaque changement est daté et conservé** (nouvelle version `seuils-vN`, jamais d'écrasement) ; historique consultable avec motif et auteur.
-- **« Revenir aux valeurs du plan »** : même confirmation ; c'est un changement de plus dans l'historique, rien n'est effacé.
-- **Indicateur sur la jauge** tant que des seuils diffèrent du plan (« ⚠ Seuils modifiés (n) — différents de ceux du plan », cliquable), rappelé dans « Comprendre l'échelle ».
-- Phrase affichée en haut de l'écran et dans la confirmation : *« Changer un seuil change la façon dont les paliers sont calculés : les valeurs d'avant et d'après ne reposent plus sur les mêmes règles, l'historique et la tendance deviennent donc moins comparables. »* Après un changement, la tendance est affichée « non comparable » et un marqueur « Seuils vN » apparaît dans l'historique.
-- En maquette, l'enregistrement ne recalcule pas la jauge (c'est le serveur qui le fera) ; seuls l'historique, l'indicateur et la tendance réagissent.
-
-## Rappel : écrans et vérifications de la passe 2
-
-Réglages (Général, État des sources, Notifications, Seuils), pays réels du flanc est, bleu nuit par défaut, vues fixes : décrits ci-dessus et dans `docs/api-contract.md` ; captures `reglages-*`, `etat-*`, `carte-*`, `nominal-*` dans `docs/screenshots/`.
-
-## Lancer en local
-
-```bash
-cd frontend && npm ci && PORT=5173 npm run dev     # http://localhost:5173  (mode mock)
-npm test && npm run e2e && npm run screenshots
-```
+1. **Authentification des écritures** : page de connexion dans le dashboard (jeton gardé le temps de la session), ou authentification au niveau du relais ? Tant que ce n'est pas tranché, aucune écriture ne passe depuis l'interface (ce qui est cohérent avec le gel des seuils pendant le pilote).
+2. **Vue par défaut au chargement** : la France est « calme » (palier 10 ou non calculable) alors que le flanc est concentre l'activité. Garder la France par défaut (règle du plan), ou ouvrir sur le flanc est ?
+3. Veux-tu une **interface de saisie de revue humaine** (pour qualifier un événement à 70/85/100) avant le pilote, ou seulement après ?
+4. Le **compose racine** (propriété de A) doit-il reprendre le service `dashboard` ? À décider avec A.

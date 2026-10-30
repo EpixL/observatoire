@@ -373,3 +373,4 @@ a.btn.primary { color: var(--on-accent); }
 
 .banner.method h2 { color: var(--watch); }
 input[readonly] { opacity: 0.85; cursor: default; }
+.territory-select { min-height: 44px; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-weight: 700; font-size: 16px; color: var(--text); }

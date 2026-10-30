@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { JournalEntry, SourceRecord } from '../types';
+import type { JournalEntry, ReviewItem, SourceRecord } from '../types';
 import { fmt } from '../lib/format';
 
 const STATE_LABEL = { ok: 'À jour', retard: 'En retard', indisponible: 'Indisponible', desactivee: 'Désactivée' } as const;
@@ -57,12 +57,49 @@ export function Sources({ list, now }: { list: SourceRecord[]; now: string }) {
 
 const J_KIND: Record<JournalEntry['kind'], string> = { palier: 'Palier', methode: 'Méthode / seuils', source: 'Source', evenement: 'Événement', notification: 'Notification', revue: 'Revue' };
 
-export function Journal({ entries }: { entries: JournalEntry[] }) {
+const REVIEW_KIND: Record<string, string> = {
+  claim_qualification: 'Qualification hostile à valider',
+  unqualified_document: 'Document à qualifier',
+  prompt_injection_suspected: 'Instruction suspecte dans un document',
+  possible_same_origin: 'Origine commune possible',
+  attribution_without_event: 'Attribution sans événement',
+};
+
+export function Journal({ entries, partial, reviews, onSelectEvent }: { entries: JournalEntry[]; partial: boolean; reviews: ReviewItem[]; onSelectEvent: (id: string) => void }) {
   const [kind, setKind] = useState<'tous' | JournalEntry['kind']>('tous');
   const shown = entries.filter((e) => kind === 'tous' || e.kind === kind);
   return (
     <section className="panel" aria-labelledby="jr-title" data-testid="journal">
       <h2 id="jr-title">Journal des changements</h2>
+      {partial && (
+        <p className="notice" style={{ marginBottom: 10 }} data-testid="journal-partial">
+          Journal partiel : le serveur n’expose pas encore de route de journal. Seuls les changements de seuils (réels, datés) sont listés ; les mouvements de palier, de sources et d’événements ne le sont pas.
+        </p>
+      )}
+      <section aria-labelledby="rv-title" data-testid="reviews" style={{ marginBottom: 14 }}>
+        <h3 id="rv-title" className="subhead">File de revue humaine ({reviews.length})</h3>
+        {reviews.length === 0 ? (
+          <p className="empty">Rien à qualifier.</p>
+        ) : (
+          <ul className="ev-list">
+            {reviews.map((r) => (
+              <li key={r.id}>
+                <button type="button" className="ev-btn" disabled={!r.event_id} onClick={() => r.event_id && onSelectEvent(r.event_id)}>
+                  <span className="t">{REVIEW_KIND[r.kind] ?? r.kind}</span>
+                  <span className="s">
+                    <span>{r.reason}</span>
+                    {r.event_id && <span className="mono">{r.event_id}</span>}
+                    <span className="num">{fmt(r.created_at)}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+          Qualifier un événement (palier 70 et au-dessus) se fait par une revue humaine ; elle n’est pas encore saisissable depuis cet écran.
+        </p>
+      </section>
       <p className="muted" style={{ marginBottom: 10 }}>
         Permet de reconstruire le dossier au moment d’une alerte. Les notifications sont simulées : rien n’est envoyé.
       </p>

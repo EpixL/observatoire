@@ -25,7 +25,7 @@ for (const theme of ['dark', 'light'] as const) {
       }
     }
     await open(page, 'nominal', 'vue', theme);
-    await page.getByTestId('ev-EV-005').click();
+    await page.getByTestId('ev-EV-5').click();
     await page.getByRole('button', { name: 'Comprendre l’échelle' }).click();
     await run('dialogue échelle');
     await page.keyboard.press('Escape');

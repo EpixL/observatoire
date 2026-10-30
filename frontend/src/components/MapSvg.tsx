@@ -4,6 +4,7 @@ import type { GeoProjection } from 'd3-geo';
 import type { VeilleEvent } from '../types';
 import { cluster, graticule, pathFor, type RegionProps } from '../lib/geo';
 import { shapePath } from './LayerSymbol';
+import { a3Of } from '../lib/zones';
 
 interface Props {
   width: number;
@@ -65,12 +66,12 @@ export function MapSvg({ width, height, projection, backdrop, focus = [], events
   );
   const groups = useMemo(() => cluster(placed, (small ? 20 : 30) / scale), [placed, scale, small]);
 
-  const haloIsos = new Set(events.filter((e) => e.location.kind === 'point' && e.location.precision === 'pays').map((e) => (e.location as { iso?: string }).iso));
+  const haloIsos = new Set(events.filter((e) => e.location.kind === 'point' && e.location.precision === 'pays').map((e) => a3Of((e.location as { iso?: string }).iso)));
   // pas d'étiquette de pays sous un regroupement : il masquerait le texte
   const clustered = new Set(groups.filter((g) => g.items.length > 1).flatMap((g) => g.items.map((e) => e.id)));
   const labelled = events
     .filter((e) => e.location.kind === 'point' && e.location.iso && e.location.precision === 'pays' && !clustered.has(e.id))
-    .map((e) => e.location as { iso: string });
+    .map((e) => ({ iso: a3Of((e.location as { iso: string }).iso)! }));
 
   return (
     <svg ref={ref} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={ariaLabel} data-testid={testId}>

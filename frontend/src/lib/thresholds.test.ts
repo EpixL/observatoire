@@ -31,7 +31,7 @@ describe('seuils : garde-fous', () => {
     expect(r.history[0].kind).toBe('retour_plan');
   });
   it('la tendance devient non comparable après un changement récent, pas avant', () => {
-    const g = buildSnapshot('nominal').gauge;
+    const g = buildSnapshot('nominal', 'flanc-est').gauge;
     const a = applyChanges(base(), [{ key: 'anomaly_mad_k', to: 2.5 }], 'essai', '2026-10-29T15:00:00Z', 'modification');
     const adj = adjustGauge(g, a.history, '2026-10-29T15:30:00Z');
     expect(adj.trend_24h.direction).toBe('non_comparable');

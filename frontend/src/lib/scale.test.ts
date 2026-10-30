@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PALIERS, PALIER_VALUES, palierAngle, palierTone, trendSentence } from './scale';
 import { stepPaths, toSegments } from './history';
 import { applyFilters, DEFAULT_FILTERS } from './filters';
-import { buildSnapshot, SCENARIOS } from '../mocks/scenarios';
+import { buildSnapshot, SCENARIOS, storyTerritoryOf } from '../mocks/scenarios';
 import type { HistoryPoint } from '../types';
 
 describe('échelle', () => {
@@ -45,25 +45,28 @@ describe('historique en escalier', () => {
 
 describe('scénarios fictifs', () => {
   it.each(SCENARIOS.map((s) => s.id))('%s : cohérent et marqué fictif', (id) => {
-    const s = buildSnapshot(id);
+    const s = buildSnapshot(id, storyTerritoryOf(id));
     expect(s.demo).toBe(true);
     expect(s.events.every((e) => e.fictional)).toBe(true);
     // jamais de coordonnées « précises » : toute position est indicative
     expect(s.events.every((e) => e.location.kind === 'none' || ['pays', 'region', 'indicatif'].includes(e.location.precision))).toBe(true);
+    // le territoire ne contient que ses zones (une attaque en Ukraine n'est pas une attaque en France)
+    const terr = s.territories.find((t) => t.id === s.gauge.territory.id)!;
+    expect(s.events.every((e) => e.zone_code == null || terr.zones.includes(e.zone_code))).toBe(true);
     // non calculable ⇒ pas de palier courant, jamais 0 par défaut
     if (s.gauge.status === 'non_calculable') expect(s.gauge.palier).toBeNull();
     else expect(PALIER_VALUES).toContain(s.gauge.palier);
     expect(s.counters.unique_events).toBeGreaterThan(0);
   });
   it('les filtres ne retirent que de l’affichage (aucune mutation)', () => {
-    const s = buildSnapshot('nominal');
+    const s = buildSnapshot('nominal', 'flanc-est');
     const n = s.events.length;
     const f = applyFilters(s.events, { ...DEFAULT_FILTERS, layers: new Set(['restrictions']) }, s.as_of);
     expect(f.every((e) => e.layer === 'restrictions')).toBe(true);
     expect(s.events).toHaveLength(n);
   });
   it('une reprise de la même dépêche ne compte pas comme origine indépendante', () => {
-    const e = buildSnapshot('nominal').events.find((x) => x.id === 'EV-005')!;
+    const e = buildSnapshot('nominal', 'flanc-est').events.find((x) => x.id === 'EV-5')!;
     expect(e.sources).toHaveLength(3);
     expect(new Set(e.sources.map((s) => s.origin_id)).size).toBe(1);
     expect(e.independent_origins).toBe(1);

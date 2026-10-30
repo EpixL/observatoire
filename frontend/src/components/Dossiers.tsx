@@ -3,6 +3,7 @@ import type { AiState, DossierScenario, VeilleEvent } from '../types';
 import { Hypotheses } from './Interpretation';
 import { StatusBadge } from './EventViews';
 import { fmt } from '../lib/format';
+import { eventId } from '../lib/normalize';
 
 const TABS = [
   { id: 'regles', label: 'Interprétation par règles' },
@@ -122,7 +123,7 @@ export function Dossiers({ dossiers, events, selectedDossier, onDossier, ai, onA
                 <p className="empty">Aucun élément rattaché à ce dossier.</p>
               ) : (
                 <ul className="ev-list">
-                  {d.event_ids.map((id) => {
+                  {d.event_ids.map(eventId).map((id) => {
                     const e = events.find((x) => x.id === id);
                     if (!e) return null;
                     return (
@@ -173,7 +174,11 @@ export function AiPane({ ai, onAi, onOpenSettings, done }: { ai: AiState; onAi: 
       <p>
         L’analyse IA est <b>facultative</b> : elle ne modifie ni le score ni une confirmation officielle. Elle apparaît séparément, datée, avec modèle et références, et signale ses désaccords avec les règles. L’avis précédent n’est jamais effacé.
       </p>
-      {ai.mode === 'desactivee' ? (
+      {!ai.available ? (
+        <div className="notice" data-testid="ai-unavailable">
+          L’analyse IA n’est <b>pas encore disponible côté serveur</b> (lot 5). Rien n’est envoyé nulle part ; l’interprétation par règles reste complète.
+        </div>
+      ) : ai.mode === 'desactivee' ? (
         <div className="notice">
           Le mode IA est <b>désactivé</b> : aucune consommation. <button type="button" className="btn link" onClick={onOpenSettings}>Activer manuellement dans les réglages</button> (aucun appel automatique).
         </div>

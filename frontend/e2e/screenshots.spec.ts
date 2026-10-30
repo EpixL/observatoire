@@ -1,6 +1,6 @@
 import { test } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { buildSnapshot } from '../src/mocks/scenarios';
+import { backendRoutes } from '../src/mocks/backend-samples';
 import { open } from './helpers';
 
 // Régénère docs/screenshots/ : `npm run screenshots`
@@ -13,12 +13,12 @@ for (const w of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
     await open(page, 'nominal', '', 'dark');
     await page.addStyleTag({ content: FLAT });
-    await page.getByTestId('ev-EV-001').click();
+    await page.getByTestId('ev-EV-1').click();
     await page.screenshot({ path: `${OUT}nominal-sombre-${w}.png`, fullPage: true });
     if (w === 1440 || w === 390) {
       await open(page, 'nominal', '', 'light');
       await page.addStyleTag({ content: FLAT });
-      await page.getByTestId('ev-EV-001').click();
+      await page.getByTestId('ev-EV-1').click();
       await page.screenshot({ path: `${OUT}nominal-clair-${w}.png`, fullPage: true });
     }
   });
@@ -77,7 +77,7 @@ test('captures carte, outre-mer, dialogues, autres pages', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page, 'nominal', 'carte', 'dark');
   await page.getByTestId('view-europe').click();
-  await page.getByTestId('marker-EV-002').click();
+  await page.getByTestId('marker-EV-2').click();
   await page.screenshot({ path: `${OUT}carte-europe-1440.png` });
   await page.getByTestId('view-monde').click();
   await page.screenshot({ path: `${OUT}carte-monde-1440.png` });
@@ -106,7 +106,7 @@ test('captures carte, outre-mer, dialogues, autres pages', async ({ page }) => {
   await page.screenshot({ path: `${OUT}carte-mobile-390.png` });
 });
 
-// Mode API réelle : réponses simulées par Playwright (aucun backend n'est lancé). Pas de bandeau « fictif » ; erreur explicite si l'API ne répond pas.
+// Mode API réelle : le backend est SIMULÉ route par route (forme réelle, src/mocks/backend-samples.ts) ; aucun backend n'est lancé.
 for (const w of [390, 1440]) {
   test(`mode live ${w}px : tableau de bord et erreur`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
@@ -114,18 +114,33 @@ for (const w of [390, 1440]) {
       window.__VEILLE__ = { apiMode: 'live' };
       window.localStorage.setItem('veille-theme', 'dark');
     });
-    await page.route('**/api/v1/stream', (r) => r.abort());
-    await page.route('**/api/v1/overview*', (r) => r.abort());
-    await page.goto('/#/vue');
+    await page.route('**/api/v1/**', (r) => r.abort());
+    await page.goto('/?territory=flanc-est#/vue');
     await page.getByTestId('api-error').waitFor();
     await page.screenshot({ path: `${OUT}mode-live-api-injoignable-${w}.png` });
-    const base = buildSnapshot('nominal');
-    const snap = { ...base, demo: false, events: base.events.map((e) => ({ ...e, fictional: false })) };
-    await page.unroute('**/api/v1/overview*');
-    await page.route('**/api/v1/overview*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(snap) }));
+    const routes = backendRoutes();
+    await page.unroute('**/api/v1/**');
+    await page.route('**/api/v1/**', (r) => {
+      const path = new URL(r.request().url()).pathname;
+      if (path === '/api/v1/stream' || !(path in routes)) return r.abort();
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(routes[path]) });
+    });
     await page.getByTestId('api-retry').click();
     await page.locator('.gauge').waitFor();
     await page.addStyleTag({ content: FLAT });
-    await page.screenshot({ path: `${OUT}mode-live-sans-bandeau-${w}.png`, fullPage: w < 1100 ? false : false });
+    await page.screenshot({ path: `${OUT}mode-live-routes-reelles-${w}.png` });
+    await page.goto('/?territory=flanc-est#/reglages/seuils');
+    await page.getByTestId('frozen-banner').waitFor();
+    await page.screenshot({ path: `${OUT}mode-live-seuils-pilot-frozen-absent-${w}.png`, fullPage: false });
+  });
+}
+
+// Territoires : France par défaut (calme, sans conclusion rédigée) et flanc est.
+for (const w of [390, 1440]) {
+  test(`territoires ${w}px`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
+    await open(page, 'nominal', '', 'dark', '&territory=FR');
+    await page.addStyleTag({ content: FLAT });
+    await page.screenshot({ path: `${OUT}territoire-france-defaut-${w}.png`, fullPage: false });
   });
 }

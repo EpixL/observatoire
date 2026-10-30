@@ -50,6 +50,7 @@ function readTheme(): Theme {
 
 export default function App() {
   const [scenario, setScenario] = useState(readScenario);
+  const [territory, setTerritory] = useState<string | undefined>(() => new URLSearchParams(window.location.search).get('territory') ?? undefined);
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loc, setLoc] = useState(readRoute);
   const { route, section } = loc;
@@ -87,7 +88,7 @@ export default function App() {
     let live = true;
     const attempt = () =>
       dataClient
-        .load(scenario)
+        .load({ scenario, territory })
         .then((s) => {
           if (!live) return;
           hasData.current = true;
@@ -117,7 +118,7 @@ export default function App() {
       off();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario, retryKey, loadError !== null, staleSince !== null]);
+  }, [scenario, territory, retryKey, loadError !== null, staleSince !== null]);
 
   useEffect(() => {
     document.title = snap && !snap.demo ? 'VEILLE — observatoire de situation' : 'VEILLE — observatoire de situation (maquette)';
@@ -156,8 +157,18 @@ export default function App() {
   if (!snap || !thr || !notif) return <p style={{ padding: 16 }} role="status">Chargement…</p>;
 
   const ai = { ...snap.ai, mode: aiMode ?? snap.ai.mode, budget_exhausted: budgetOut ?? snap.ai.budget_exhausted };
-  const saveThresholds = (changes: { key: string; to: number }[], reason: string) => void dataClient.saveThresholds(thr, changes, reason).then(setThr);
-  const resetThresholds = (reason: string) => void dataClient.resetThresholds(thr, reason).then(setThr);
+  // les erreurs du serveur (409, 422, 423, 401, 503…) remontent à l'écran Réglages, qui reste ouvert et les affiche
+  const saveThresholds = async (changes: { key: string; to: number }[], reason: string) => setThr(await dataClient.saveThresholds(thr, changes, reason));
+  const resetThresholds = async (reason: string) => setThr(await dataClient.resetThresholds(thr, reason));
+  const changeTerritory = (id: string) => {
+    setTerritory(id);
+    setSelectedId(null);
+    setClusterIds([]);
+    const u = new URL(window.location.href);
+    u.searchParams.set('territory', id);
+    window.history.replaceState(null, '', u);
+  };
+  const latestMethodChange = [...snap.method_changes].sort((a, b) => a.at.localeCompare(b.at)).pop();
   const saveNotifications = (n: NotificationSettings) => {
     setNotif(n);
     void dataClient.saveNotifications(n);
@@ -206,7 +217,7 @@ export default function App() {
   const list = <EventList events={visible} counters={snap.counters} selectedId={selectedId} onSelect={select} />;
   const aiButton = (
     <p className="panel" style={{ margin: 0 }}>
-      <button type="button" className="btn" style={{ width: '100%' }} onClick={() => (ai.mode === 'desactivee' || ai.budget_exhausted ? go('dossiers') : setAiOpen(true))} aria-haspopup={ai.mode === 'desactivee' || ai.budget_exhausted ? undefined : 'dialog'}>
+      <button type="button" className="btn" style={{ width: '100%' }} onClick={() => (!ai.available || ai.mode === 'desactivee' || ai.budget_exhausted ? go('dossiers') : setAiOpen(true))} aria-haspopup={!ai.available || ai.mode === 'desactivee' || ai.budget_exhausted ? undefined : 'dialog'}>
         Approfondir avec l’IA (facultatif)
       </button>
     </p>
@@ -225,8 +236,16 @@ export default function App() {
             <span>observatoire de situation</span>
           </div>
           <div className="zone">
-            <small>Territoire évalué</small>
-            <strong>{gauge.territory.label}</strong>
+            <label htmlFor="territory-select">
+              <small>Territoire évalué</small>
+            </label>
+            <select id="territory-select" className="territory-select" value={gauge.territory.id} onChange={(e) => changeTerritory(e.target.value)} data-testid="territory-select">
+              {snap.territories.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="status" aria-label="État du système">
             <span className={`chip ${okSources === snap.sources.length ? 'ok' : 'watch'}`} data-testid="src-state">
@@ -266,9 +285,7 @@ export default function App() {
             </section>
           )}
           {snap.civil_alert && <CivilBanner alert={snap.civil_alert} />}
-          {snap.method_changes.map((c) => (
-            <MethodBanner key={c.at} change={c} />
-          ))}
+          {latestMethodChange && Date.parse(snap.as_of) - Date.parse(latestMethodChange.at) <= 7 * 24 * 3_600_000 && <MethodBanner change={latestMethodChange} />}
 
           {route === 'vue' && (
             <>
@@ -283,7 +300,7 @@ export default function App() {
                     </div>
                   )}
                   <div className="o-concl">
-                    <Conclusion c={snap.conclusion} onSelect={select} />
+                    <Conclusion c={snap.conclusion} onSelect={select} criteria={snap.criteria} gauge={gauge} />
                   </div>
                   <div className="o-hyp stack">
                     <Hypotheses list={snap.hypotheses} />
@@ -349,7 +366,7 @@ export default function App() {
             />
           )}
           {route === 'sources' && <Sources list={snap.sources} now={snap.as_of} />}
-          {route === 'journal' && <Journal entries={snap.journal} />}
+          {route === 'journal' && <Journal entries={snap.journal} partial={snap.journal_partial} reviews={snap.reviews} onSelectEvent={(id) => { select(id); go('carte'); }} />}
           {route === 'reglages' && (
             <Reglages
               section={section}
@@ -375,7 +392,7 @@ export default function App() {
         </footer>
       </div>
 
-      <ScaleDialog open={scaleOpen} onClose={() => setScaleOpen(false)} gauge={gauge} thresholdsModified={nModified} />
+      <ScaleDialog open={scaleOpen} onClose={() => setScaleOpen(false)} gauge={gauge} thresholdsModified={nModified} paliers={snap.paliers} />
       <AiDialog
         open={aiOpen}
         onClose={() => setAiOpen(false)}

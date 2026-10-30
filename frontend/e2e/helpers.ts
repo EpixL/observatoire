@@ -11,8 +11,12 @@ export function watchRequests(page: Page): string[] {
   return external;
 }
 
+/** Territoire sur lequel chaque scénario raconte son histoire (voir STORY_TERRITORY des mocks) ; l'autre territoire est « calme ». */
+const STORY: Record<string, string> = { civile: 'FR', partielle: 'FR' };
+
 export async function open(page: Page, scenario = 'nominal', route = '', theme: 'dark' | 'light' | null = 'dark', query = '') {
   if (theme) await page.addInitScript((t) => window.localStorage.setItem('veille-theme', t), theme);
-  await page.goto(`/?scenario=${scenario}${query}#/${route}`);
+  const territory = query.includes('territory=') ? '' : `&territory=${STORY[scenario] ?? 'flanc-est'}`;
+  await page.goto(`/?scenario=${scenario}${territory}${query}#/${route}`);
   await page.waitForSelector('main');
 }

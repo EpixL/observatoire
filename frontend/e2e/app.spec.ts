@@ -104,7 +104,7 @@ test.describe('états particuliers (section 10)', () => {
     await open(page, 'methode');
     await expect(page.getByTestId('method-banner')).toContainText('tendance est suspendue');
     await expect(page.locator('.gauge')).toContainText('tendance non comparable');
-    await expect(page.getByTestId('history').locator('.mchg')).toHaveCount(1);
+    await expect(page.getByTestId('history').locator('.mchg')).toHaveCount(2); // v1 → v2, v2 → v3
   });
   test('fait grave + couverture partielle : palier documenté avec badge', async ({ page }) => {
     await open(page, 'partielle');
@@ -135,57 +135,58 @@ test.describe('carte', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await open(page);
     await page.getByTestId('view-europe').click();
-    await page.getByTestId('marker-EV-001').click();
+    await page.getByTestId('marker-EV-1').click();
     await expect(page.getByTestId('event-card')).toContainText('Restriction aérienne temporaire');
-    await expect(page.getByTestId('ev-EV-001')).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('ev-EV-004').click();
+    await expect(page.getByTestId('ev-EV-1')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('ev-EV-4').click();
     await expect(page.getByTestId('event-card')).toContainText('Exercice militaire annoncé');
-    await expect(page.getByTestId('ev-EV-001')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('ev-EV-1')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('event-card')).toContainText('Critère non rempli');
   });
   test('vues France / Europe / Monde et outre-mer ; le territoire évalué ne change pas', async ({ page }) => {
     await open(page);
-    const zone = await page.locator('.header .zone strong').textContent();
+    await expect(page.getByTestId('territory-select')).toHaveValue('flanc-est');
     for (const v of ['europe', 'monde', 'france']) {
       await page.getByTestId(`view-${v}`).click();
       await expect(page.getByTestId(`view-${v}`)).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.locator('.header .zone strong')).toHaveText(zone!);
+      await expect(page.getByTestId('territory-select')).toHaveValue('flanc-est'); // la caméra ne change jamais le territoire évalué
     }
+    await page.getByTestId('territory-select').selectOption('FR');
     await page.getByTestId('view-outremer').click();
     await expect(page.getByTestId('overseas').locator('figure')).toHaveCount(8);
-    await expect(page.getByTestId('marker-EV-007')).toBeVisible();
+    await expect(page.getByTestId('marker-EV-7')).toBeVisible();
   });
   test('couches sélectionnables : masquer une couche ne supprime que l’affichage', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await open(page);
     await page.getByTestId('view-europe').click();
-    await expect(page.getByTestId('marker-EV-001')).toBeVisible();
+    await expect(page.getByTestId('marker-EV-1')).toBeVisible();
     await page.getByTestId('layer-restrictions').click();
-    await expect(page.getByTestId('marker-EV-001')).toHaveCount(0);
+    await expect(page.getByTestId('marker-EV-1')).toHaveCount(0);
     await expect(page.getByTestId('layer-satellite')).toBeDisabled();
     await page.getByTestId('layer-restrictions').click();
-    await expect(page.getByTestId('marker-EV-001')).toBeVisible();
+    await expect(page.getByTestId('marker-EV-1')).toBeVisible();
   });
   test('liste « non localisé », exclus avec motif, retenus seulement', async ({ page }) => {
     await open(page);
     await expect(page.getByTestId('unlocated-head')).toContainText('(1)');
     await page.getByRole('button', { name: 'Afficher les éléments exclus' }).click();
-    await page.getByTestId('ev-EV-009').click();
+    await page.getByTestId('ev-EV-9').click();
     await expect(page.getByTestId('event-card')).toContainText('Doublon');
     await page.getByRole('button', { name: /retenus dans l’évaluation/ }).click();
-    await expect(page.getByTestId('ev-EV-004')).toHaveCount(0);
-    await expect(page.getByTestId('ev-EV-001')).toBeVisible();
+    await expect(page.getByTestId('ev-EV-4')).toHaveCount(0);
+    await expect(page.getByTestId('ev-EV-1')).toBeVisible();
   });
   test('reprises d’une même dépêche : une origine, pas trois confirmations', async ({ page }) => {
     await open(page);
-    await page.getByTestId('ev-EV-005').click();
+    await page.getByTestId('ev-EV-5').click();
     await expect(page.getByTestId('event-card')).toContainText('1 origine indépendante');
     await expect(page.getByTestId('event-card')).toContainText('Plusieurs reprises');
   });
   test('un événement hors de la vue courante propose de changer de vue', async ({ page }) => {
     await open(page);
     await page.getByTestId('view-france').click();
-    await page.getByTestId('ev-EV-002').click();
+    await page.getByTestId('ev-EV-2').click();
     await page.getByRole('button', { name: 'Passer à la vue Europe' }).click();
     await expect(page.getByTestId('view-europe')).toHaveAttribute('aria-pressed', 'true');
   });
@@ -245,7 +246,7 @@ test.describe('clavier, focus et zéro appel externe', () => {
   });
   test('sélection d’un élément au clavier depuis la liste', async ({ page }) => {
     await open(page);
-    await page.getByTestId('ev-EV-003').focus();
+    await page.getByTestId('ev-EV-3').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('event-card')).toContainText('conseil aux voyageurs');
   });
@@ -282,13 +283,17 @@ test.describe('thème et flanc est', () => {
 });
 
 test.describe('événements fictifs : pays réels, bandeau permanent', () => {
-  test('zone : France + flanc est (PL, LT, LV, BY, MD, RU, UA)', async ({ page }) => {
+  test('zone : flanc est (PL, LT, LV, BY, MD, RU, UA) puis France (outre-mer compris)', async ({ page }) => {
     await open(page);
-    for (const [id, pays] of [['EV-001', 'Pologne'], ['EV-002', 'Lituanie'], ['EV-003', 'Moldavie'], ['EV-004', 'Russie'], ['EV-005', 'Lettonie'], ['EV-006', 'Biélorussie'], ['EV-013', 'Ukraine'], ['EV-007', 'Nouvelle-Calédonie']]) {
+    for (const [id, pays] of [['EV-1', 'Pologne'], ['EV-2', 'Lituanie'], ['EV-3', 'Moldavie'], ['EV-4', 'Russie'], ['EV-5', 'Lettonie'], ['EV-6', 'Biélorussie'], ['EV-13', 'Ukraine']]) {
       await page.getByTestId(`ev-${id}`).click();
       await expect(page.getByTestId('event-card')).toContainText(pays);
       await expect(page.getByTestId('event-card')).toContainText('Donnée fictive');
     }
+    await page.getByTestId('territory-select').selectOption('FR');
+    await page.getByTestId('ev-EV-7').click();
+    await expect(page.getByTestId('event-card')).toContainText('Nouvelle-Calédonie');
+    await expect(page.getByTestId('ev-EV-1')).toHaveCount(0); // un événement du flanc est ne compte pas pour la France
   });
   test('bandeau DONNÉES FICTIVES visible partout, aussi sur la carte et dans Réglages', async ({ page }) => {
     for (const r of ROUTES) {
@@ -302,7 +307,7 @@ test.describe('événements fictifs : pays réels, bandeau permanent', () => {
   });
   test('liens proposés : jamais une preuve', async ({ page }) => {
     await open(page);
-    await page.getByTestId('ev-EV-001').click();
+    await page.getByTestId('ev-EV-1').click();
     await expect(page.getByTestId('event-card')).toContainText('Cause commune possible');
     await expect(page.getByTestId('event-card')).toContainText('non établie');
   });
@@ -404,5 +409,42 @@ test.describe('réglages', () => {
     await page.getByTestId('thresholds-flag').getByRole('link').click();
     await expect(page.getByTestId('thr-history').locator('li')).toHaveCount(2);
     await expect(page.getByTestId('thr-history')).toContainText('Motif');
+  });
+});
+
+test.describe('territoires (comme le backend : FR par défaut, flanc-est)', () => {
+  test('par défaut : France ; les événements du flanc est ne comptent pas ; constat des règles faute de conclusion rédigée', async ({ page }) => {
+    await page.goto('/?scenario=nominal#/vue');
+    await expect(page.getByTestId('territory-select')).toHaveValue('FR');
+    await expect(page.locator('.gauge svg')).toHaveAttribute('aria-label', /France/);
+    await expect(page.getByTestId('ev-EV-1')).toHaveCount(0);
+    await expect(page.getByTestId('ev-EV-7')).toBeVisible();
+    await expect(page.getByTestId('conclusion')).toContainText('Conclusion rédigée indisponible');
+    await expect(page.getByTestId('criteria').locator('li')).toHaveCount(8);
+  });
+  test('changer de territoire change la jauge et les événements, pas la vue de la carte', async ({ page }) => {
+    await page.goto('/?scenario=nominal#/vue');
+    await page.getByTestId('view-monde').click();
+    await page.getByTestId('territory-select').selectOption('flanc-est');
+    await expect(page.locator('.gauge svg')).toHaveAttribute('aria-label', /40 sur 100.*Flanc est/);
+    await expect(page.getByTestId('view-monde')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('conclusion')).toContainText('durcissement des précautions');
+    await expect(page).toHaveURL(/territory=flanc-est/);
+  });
+  test('affirmations (confirmation officielle par affirmation) et revue humaine enregistrée', async ({ page }) => {
+    await open(page, 'partielle');
+    await page.getByTestId('ev-EV-102').click();
+    await expect(page.getByTestId('claims')).toContainText('Confirmée officiellement');
+    await expect(page.getByTestId('annotations')).toContainText('grave_hostile_act');
+    await open(page, 'nominal');
+    await page.getByTestId('ev-EV-2').click();
+    await expect(page.getByTestId('claims')).toContainText('Non confirmée officiellement');
+    await expect(page.getByTestId('claims')).toContainText('Corroboration');
+  });
+  test('journal partiel signalé ; file de revue humaine listée', async ({ page }) => {
+    await open(page, 'nominal', 'journal');
+    await expect(page.getByTestId('journal-partial')).toHaveCount(0); // maquette : journal complet simulé
+    await expect(page.getByTestId('reviews')).toContainText('Qualification hostile à valider');
+    await expect(page.getByTestId('reviews')).toContainText('Document à qualifier');
   });
 });

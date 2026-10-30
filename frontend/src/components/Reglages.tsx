@@ -28,8 +28,9 @@ interface Props {
   notifications: NotificationSettings;
   onNotifications: (n: NotificationSettings) => void;
   thresholds: ThresholdsState;
-  onSaveThresholds: (changes: { key: string; to: number }[], reason: string) => void;
-  onResetThresholds: (reason: string) => void;
+  /** Rejette avec le message du serveur (409, 422, 423, 401, 503…) : la boîte de confirmation reste ouverte et l'affiche. */
+  onSaveThresholds: (changes: { key: string; to: number }[], reason: string) => Promise<void>;
+  onResetThresholds: (reason: string) => Promise<void>;
 }
 
 export function Reglages(p: Props) {
@@ -214,6 +215,7 @@ const LEVELS: { id: NotificationLevel; label: string; hint: string }[] = [
 ];
 
 function Notifications({ value, onChange }: { value: NotificationSettings; onChange: (n: NotificationSettings) => void }) {
+  const ro = !value.editable;
   return (
     <div className="stack" data-testid="notifications">
       <section className="panel" aria-labelledby="n-title">
@@ -226,8 +228,13 @@ function Notifications({ value, onChange }: { value: NotificationSettings; onCha
         <p style={{ marginBottom: 10 }}>
           <span className="chip watch">Canal Telegram : non activé — interface seule (lot 7)</span>
         </p>
+        {ro && (
+          <p className="notice" style={{ marginBottom: 10 }} data-testid="notif-readonly">
+            Réglage en lecture seule : le serveur ne gère pas encore les notifications (lot 7). L’état affiché est celui du pilote, pas un réglage enregistré.
+          </p>
+        )}
         <label className="switch-row">
-          <input type="checkbox" checked={value.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} data-testid="notif-enabled" />
+          <input type="checkbox" checked={value.enabled} disabled={ro} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} data-testid="notif-enabled" />
           <span>
             <b>{value.enabled ? 'Notifications activées' : 'Sortir du mode silencieux (activer les notifications)'}</b>
             <br />
@@ -238,7 +245,7 @@ function Notifications({ value, onChange }: { value: NotificationSettings; onCha
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>Niveau {value.enabled ? '' : '(choisi, sans effet tant que silencieux)'}</legend>
           {LEVELS.map((l) => (
             <label key={l.id} className="radio-row">
-              <input type="radio" name="level" checked={value.level === l.id} onChange={() => onChange({ ...value, level: l.id })} />
+              <input type="radio" name="level" checked={value.level === l.id} disabled={ro} onChange={() => onChange({ ...value, level: l.id })} />
               <span>
                 <b>{l.label}</b>
                 <br />
@@ -281,12 +288,16 @@ function Seuils(p: Props) {
   const modified = modifiedItems(items);
   const reasonOk = reason.trim().length >= 8;
   const close = () => {
+    setErr(null);
     setConfirm(null);
     setReason('');
     setAck(false);
   };
   const num = (n: number) => String(n).replace('.', ',');
-  const frozen = p.thresholds.pilot_frozen;
+  // `pilot_frozen` absent (backend actuel) = gelé : valeur sûre ; seul `false` explicite débloque l'édition
+  const frozen = p.thresholds.pilot_frozen !== false;
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <div className="stack" data-testid="seuils">
@@ -430,16 +441,29 @@ function Seuils(p: Props) {
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} data-testid="thr-ack" />
           <span>Je comprends que l’historique sera moins comparable et que ce changement sera daté et conservé.</span>
         </label>
+        {err && (
+          <p className="err" role="alert" data-testid="thr-error">
+            ✖ Enregistrement refusé : {err}
+          </p>
+        )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             type="button"
             className="btn primary"
-            disabled={!reasonOk || !ack}
-            onClick={() => {
-              if (confirm === 'reset') p.onResetThresholds(reason.trim());
-              else p.onSaveThresholds(pending.map(({ item, to }) => ({ key: item.key, to })), reason.trim());
-              setDraft({});
-              close();
+            disabled={!reasonOk || !ack || busy}
+            onClick={async () => {
+              setBusy(true);
+              setErr(null);
+              try {
+                if (confirm === 'reset') await p.onResetThresholds(reason.trim());
+                else await p.onSaveThresholds(pending.map(({ item, to }) => ({ key: item.key, to })), reason.trim());
+                setDraft({});
+                close();
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : String(e));
+              } finally {
+                setBusy(false);
+              }
             }}
             data-testid="thr-confirm"
           >

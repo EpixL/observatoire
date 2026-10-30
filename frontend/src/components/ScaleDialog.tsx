@@ -1,4 +1,4 @@
-import type { GaugeState } from '../types';
+import type { GaugeState, PalierDef } from '../types';
 import { Dialog } from './Dialog';
 import { PALIERS } from '../lib/scale';
 
@@ -7,9 +7,12 @@ interface Props {
   onClose: () => void;
   gauge: GaugeState;
   thresholdsModified?: number;
+  /** Définitions publiées par le backend (config/index-scale.yaml) ; sinon table locale du plan. */
+  paliers?: PalierDef[];
 }
 
-export function ScaleDialog({ open, onClose, gauge, thresholdsModified = 0 }: Props) {
+export function ScaleDialog({ open, onClose, gauge, thresholdsModified = 0, paliers }: Props) {
+  const rows = paliers?.length ? paliers.map((d) => ({ value: d.value, label: d.label, criteria: d.definition })) : PALIERS;
   return (
     <Dialog id="scale" open={open} onClose={onClose} title="Comprendre l’échelle">
       <p>
@@ -17,7 +20,7 @@ export function ScaleDialog({ open, onClose, gauge, thresholdsModified = 0 }: Pr
         signifie pas un risque multiplié : les écarts sont conventionnels, <b>non probabilistes</b>. Aucun compte à rebours.
       </p>
       <ul className="scale-table">
-        {PALIERS.map((p) => (
+        {rows.map((p) => (
           <li key={p.value} aria-current={gauge.palier === p.value ? 'true' : undefined}>
             <span className="v">{p.value}</span>
             <div>

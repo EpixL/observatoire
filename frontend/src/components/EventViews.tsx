@@ -12,6 +12,7 @@ const EVIDENCE: Record<VeilleEvent['evidence_status'], string> = {
 };
 const EXCL: Record<ExclusionReason, string> = { doublon: 'Doublon', hors_perimetre: 'Hors périmètre', perime: 'Données périmées', preuve_insuffisante: 'Preuve insuffisante' };
 const PRECISION: Record<VeilleEvent['occurred_precision'], string> = { instant: 'horodatage précis', day: 'au jour près', month: 'au mois près', year: 'à l’année près', unknown: 'date inconnue' };
+const CLAIM_ROLE = { primary: 'Principale', corroboration: 'Corroboration', contradiction: 'Contradiction', attribution: 'Attribution' } as const;
 const layerLabel = (id: string) => LAYERS.find((l) => l.id === id)!.label;
 
 export function StatusBadge({ e }: { e: VeilleEvent }) {
@@ -60,7 +61,7 @@ export function EventList({ events, counters, selectedId, onSelect }: ListProps)
       <div className="counters" role="group" aria-label="Compteur de traitement" style={{ marginTop: 8 }}>
         <div>
           <b>{counters.documents_collected}</b>
-          <span>documents collectés</span>
+          <span>documents traités</span>
         </div>
         <div>
           <b>{counters.unique_events}</b>
@@ -212,6 +213,33 @@ export function EventCard({ event: e, offView, onGoEurope, onOpenDossier }: Card
         </p>
       )}
 
+      {e.claims && e.claims.length > 0 && (
+        <>
+          <h4 className="subhead">Affirmations ({e.claims.length}) — confirmation officielle par affirmation</h4>
+          <ul data-testid="claims">
+            {e.claims.map((c) => (
+              <li key={c.id}>
+                <span className="badge">{CLAIM_ROLE[c.role]}</span> <span className={`badge ${c.confirmation === 'official' ? 'official' : ''}`}>{c.confirmation === 'official' ? 'Confirmée officiellement' : 'Non confirmée officiellement'}</span>{' '}
+                {c.certainty === 'provisional' && <span className="badge a_verifier">Provisoire</span>}
+                {c.needs_review && <span className="badge a_verifier">Revue requise</span>} {c.statement}
+                {c.declarant && <span className="muted"> — {c.declarant}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {e.annotations && e.annotations.length > 0 && (
+        <>
+          <h4 className="subhead">Revue humaine enregistrée</h4>
+          <ul data-testid="annotations">
+            {e.annotations.map((a) => (
+              <li key={a.id}>
+                <b>{a.qualification}</b> — {a.note} <span className="muted">({a.actor}, {fmt(a.created_at)})</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {e.proposed_links.length > 0 && (
         <>
           <h4 className="subhead">Liens proposés (jamais une preuve)</h4>

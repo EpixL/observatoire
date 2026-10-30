@@ -12,6 +12,7 @@ npm run screenshots    # régénère ../docs/screenshots/
 ```
 
 - Les seuils sont **gelés** par défaut (indicateur serveur `pilot_frozen`) ; en maquette, `?pilot_frozen=0` simule le déblocage pour tester les garde-fous.
+- Territoire : `?territory=FR` (défaut) ou `?territory=flanc-est` (mock et live). En mock, chaque scénario raconte son histoire sur un territoire (flanc est, sauf `civile` et `partielle` : France) ; l’autre est « calme ».
 - Scénarios de démonstration : `?scenario=nominal|indisponible|ambigu|civile|nucleaire|methode|partielle|seuils` (ou menu en haut de page).
 - Pages : `#/vue`, `#/dossiers`, `#/carte`, `#/sources`, `#/journal`, `#/reglages/{general,sources,notifications,seuils}`.
 - Données fictives : `src/mocks/`. Branchement futur : `src/api/client.ts` (REST + SSE, voir `../docs/api-contract.md`), activé par `VITE_API_BASE`.
