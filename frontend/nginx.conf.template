@@ -1,3 +1,5 @@
+# Modèle rempli au démarrage du conteneur (envsubst) avec : PORT, API_MODE, API_UPSTREAM, DNS_RESOLVER.
+# Aucune valeur n'est figée ici ; les ports du Pi viennent du fichier .env (dashboard 8101, API 8100).
 server {
   listen ${PORT};
   server_name _;
@@ -11,8 +13,28 @@ server {
 
   location = /healthz { access_log off; add_header Content-Type text/plain; return 200 "ok\n"; }
 
+  # Mode d'API choisi au lancement (mock = données fictives, live = API réelle), sans reconstruire l'image.
+  location = /config.js {
+    default_type application/javascript;
+    add_header Cache-Control "no-store";
+    return 200 'window.__VEILLE__ = { apiMode: "${API_MODE}", apiBase: "" };';
+  }
+
+  # Relais vers le backend (REST + flux SSE). Même origine pour le navigateur : pas de CORS, aucune clé côté client.
+  location /api/ {
+    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+    set $api_upstream "${API_UPSTREAM}";
+    proxy_pass http://$api_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_buffering off;          # indispensable pour le flux SSE
+    proxy_read_timeout 3600s;
+    add_header Cache-Control "no-store";
+  }
+
   location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; }
 
-  # Plus tard : l'API (REST + SSE) sera proxifiée ici par le reverse proxy du projet, ex. `location /api/ { proxy_pass ...; proxy_buffering off; }`
   location / { add_header Cache-Control "no-cache"; try_files $uri /index.html; }
 }

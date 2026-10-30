@@ -34,7 +34,7 @@ export function applyChanges(
     const item = state.items.find((i) => i.key === c.key)!;
     return { id: `T-${state.history.length + idx + 1}`, at, kind, key: c.key, label: item.label, from: item.value, to: c.to, reason, actor, policy_version: version };
   });
-  return { policy_version: version, items, history: [...entries.reverse(), ...state.history] };
+  return { ...state, policy_version: version, items, history: [...entries.reverse(), ...state.history] };
 }
 
 /**

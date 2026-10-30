@@ -218,21 +218,26 @@ function Notifications({ value, onChange }: { value: NotificationSettings; onCha
     <div className="stack" data-testid="notifications">
       <section className="panel" aria-labelledby="n-title">
         <h2 id="n-title">Notifications</h2>
+        {!value.enabled && (
+          <p className="banner method" style={{ marginBottom: 12 }} data-testid="silent-banner">
+            <b>🔕 Mode silencieux{value.silent_until_pilot_end ? ' jusqu’à la fin du pilote' : ''}</b> (2 à 4 semaines, comme le plan le recommande). Le niveau choisi ci-dessous est conservé, <b>mais rien n’est envoyé</b> : collecte, jauge et historique continuent.
+          </p>
+        )}
         <p style={{ marginBottom: 10 }}>
           <span className="chip watch">Canal Telegram : non activé — interface seule (lot 7)</span>
         </p>
         <label className="switch-row">
           <input type="checkbox" checked={value.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} data-testid="notif-enabled" />
           <span>
-            <b>{value.enabled ? 'Notifications activées' : 'Notifications désactivées'}</b>
+            <b>{value.enabled ? 'Notifications activées' : 'Sortir du mode silencieux (activer les notifications)'}</b>
             <br />
-            <span className="muted">Désactivées = mode silencieux : collecte, jauge et historique continuent.</span>
+            <span className="muted">{value.enabled ? 'Décochez pour revenir au mode silencieux.' : 'Déconseillé avant la fin du pilote.'}</span>
           </span>
         </label>
-        <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }} disabled={!value.enabled}>
-          <legend style={{ fontWeight: 600, marginBottom: 6 }}>Niveau</legend>
+        <fieldset style={{ border: 0, padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }}>
+          <legend style={{ fontWeight: 600, marginBottom: 6 }}>Niveau {value.enabled ? '' : '(choisi, sans effet tant que silencieux)'}</legend>
           {LEVELS.map((l) => (
-            <label key={l.id} className="radio-row" style={value.enabled ? undefined : { opacity: 0.6 }}>
+            <label key={l.id} className="radio-row">
               <input type="radio" name="level" checked={value.level === l.id} onChange={() => onChange({ ...value, level: l.id })} />
               <span>
                 <b>{l.label}</b>
@@ -281,6 +286,7 @@ function Seuils(p: Props) {
     setAck(false);
   };
   const num = (n: number) => String(n).replace('.', ',');
+  const frozen = p.thresholds.pilot_frozen;
 
   return (
     <div className="stack" data-testid="seuils">
@@ -296,6 +302,15 @@ function Seuils(p: Props) {
             Version de politique <span className="mono">{policy_version}</span>
           </span>
         </p>
+        {frozen && (
+          <div className="banner method" style={{ marginBottom: 12 }} data-testid="frozen-banner">
+            <h2>🔒 Seuils gelés pendant le pilote</h2>
+            <p>
+              Les seuils sont en lecture seule : on évalue le système avec les valeurs du plan. Le déblocage passe par un indicateur de configuration du serveur (<span className="mono">pilot_frozen</span>), pas par un bouton de cette
+              interface. Les garde-fous (motif, historique, indicateur sur la jauge) s’appliquent dès le déblocage.
+            </p>
+          </div>
+        )}
         <p className="notice" data-testid="comparability">
           {COMPARABILITY_SENTENCE}
         </p>
@@ -328,7 +343,9 @@ function Seuils(p: Props) {
                     max={i.max}
                     step={i.step}
                     value={raw ?? String(i.value)}
-                    onChange={(e) => setDraft({ ...draft, [i.key]: e.target.value })}
+                    readOnly={frozen}
+                    aria-readonly={frozen || undefined}
+                    onChange={(e) => !frozen && setDraft({ ...draft, [i.key]: e.target.value })}
                     aria-invalid={err ? 'true' : undefined}
                     aria-describedby={`${id}-help`}
                     data-testid={id}
@@ -351,6 +368,11 @@ function Seuils(p: Props) {
             );
           })}
         </ul>
+        {frozen ? (
+          <p className="muted" style={{ marginTop: 14 }} data-testid="frozen-note">
+            Modification impossible tant que <span className="mono">pilot_frozen</span> est actif côté serveur ; le serveur refuserait d’ailleurs toute écriture (HTTP 423).
+          </p>
+        ) : (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           <button type="button" className="btn primary" disabled={pending.length === 0 || hasError} onClick={() => setConfirm('save')} aria-haspopup="dialog" data-testid="thr-save">
             Enregistrer… ({pending.length})
@@ -362,6 +384,7 @@ function Seuils(p: Props) {
             Revenir aux valeurs du plan…
           </button>
         </div>
+        )}
       </section>
 
       <section className="panel" aria-labelledby="t-hist" data-testid="thr-history">

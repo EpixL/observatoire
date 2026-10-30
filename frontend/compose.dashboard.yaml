@@ -1,12 +1,20 @@
-# Lancement autonome du dashboard (maquette) : `PORT=8080 docker compose -f compose.dashboard.yaml up --build`
-# Ne remplace pas le compose.yaml racine (propriété de la session backend).
+# Dashboard seul : `docker compose -f compose.dashboard.yaml --env-file .env up --build -d`
+# Ne remplace pas le compose.yaml racine (propriété de la session backend), qui pourra reprendre ce service.
+# Ports sur le Pi (vérifiés libres) : dashboard 8101, API du backend 8100 — définis dans .env, jamais dans le code.
 services:
   dashboard:
     build: .
+    image: veille-dashboard:local
     environment:
-      PORT: ${PORT:?définir PORT, par exemple PORT=8080}
+      PORT: ${PORT:?définir PORT dans .env (ex. 8101)}
+      API_MODE: ${API_MODE:-mock}
+      API_UPSTREAM: ${API_UPSTREAM:-}
+      DNS_RESOLVER: ${DNS_RESOLVER:-127.0.0.11}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT}:${PORT}"
+    # permet d'atteindre l'API publiée sur l'hôte (ex. API_UPSTREAM=host.docker.internal:8100)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

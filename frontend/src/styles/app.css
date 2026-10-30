@@ -370,3 +370,6 @@ textarea.reason { width: 100%; min-height: 88px; font: inherit; }
 .switch-row input { width: 24px; height: 24px; flex: none; }
 a.btn { color: var(--text); text-decoration: none; }
 a.btn.primary { color: var(--on-accent); }
+
+.banner.method h2 { color: var(--watch); }
+input[readonly] { opacity: 0.85; cursor: default; }

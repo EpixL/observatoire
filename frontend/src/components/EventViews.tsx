@@ -141,7 +141,7 @@ export function EventCard({ event: e, offView, onGoEurope, onOpenDossier }: Card
         <StatusBadge e={e} />
         <span className="badge">{EVIDENCE[e.evidence_status]}</span>
         {e.sources.some((s) => s.official) && <span className="badge official">Source officielle</span>}
-        <span className="badge fictif">Donnée fictive</span>
+        {e.fictional && <span className="badge fictif">Donnée fictive</span>}
       </div>
       <h3 id="card-title">
         <span className="mono muted">{e.id}</span> {e.title}

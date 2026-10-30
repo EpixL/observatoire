@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AiMode, NotificationSettings, Snapshot, ThresholdsState, VeilleEvent } from './types';
-import { dataClient, isMock } from './api/client';
-import { ago } from './lib/format';
+import { ApiError, dataClient, invalidApiMode, isMock } from './api/client';
+import { ApiErrorScreen } from './components/ApiError';
+import { applyStream } from './lib/stream';
+import { ago, fmt } from './lib/format';
 import { DEFAULT_FILTERS, applyFilters, type Filters } from './lib/filters';
 import { isInView, type MapViewId } from './lib/geo';
 import { CivilBanner, DemoBar, MethodBanner, Nuclear } from './components/Banners';
@@ -74,25 +76,52 @@ export default function App() {
     return () => window.removeEventListener('hashchange', on);
   }, []);
 
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const [lastAttempt, setLastAttempt] = useState<string | null>(null);
+  const [staleSince, setStaleSince] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const hasData = useRef(false);
+
   useEffect(() => {
+    if (invalidApiMode !== null) return;
     let live = true;
-    dataClient.load(scenario).then((s) => {
-      if (!live) return;
-      setSnap(s);
-      setThr(s.thresholds);
-      setNotif(s.notifications);
-    });
+    const attempt = () =>
+      dataClient
+        .load(scenario)
+        .then((s) => {
+          if (!live) return;
+          hasData.current = true;
+          setSnap(s);
+          setThr(s.thresholds);
+          setNotif(s.notifications);
+          setLoadError(null);
+          setStaleSince(null);
+        })
+        .catch((e: Error) => {
+          if (!live) return;
+          setLastAttempt(fmt(new Date().toISOString()));
+          // données déjà reçues : on les garde, datées et signalées périmées ; sinon écran d'erreur. Jamais de données fictives de remplacement.
+          if (hasData.current) setStaleSince((v) => v ?? new Date().toISOString());
+          else setLoadError(e instanceof Error ? e : new Error(String(e)));
+        });
+    void attempt();
+    // mode API réelle : actualisation périodique (15 s en erreur, 30 s sinon) en complément du flux SSE
+    const timer = isMock ? null : window.setInterval(() => void attempt(), loadError || staleSince ? 15_000 : 30_000);
     const off = dataClient.subscribe(
-      (m) => {
-        if (m.type === 'snapshot') setSnap(m.data);
-      },
+      (m) => setSnap((cur) => (cur ? applyStream(cur, m) : cur)),
       setStreamOn,
     );
     return () => {
       live = false;
+      if (timer) window.clearInterval(timer);
       off();
     };
-  }, [scenario]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenario, retryKey, loadError !== null, staleSince !== null]);
+
+  useEffect(() => {
+    document.title = snap && !snap.demo ? 'VEILLE — observatoire de situation' : 'VEILLE — observatoire de situation (maquette)';
+  }, [snap]);
 
   useEffect(() => {
     const el = document.documentElement;
@@ -122,7 +151,9 @@ export default function App() {
   const visible = useMemo(() => (snap ? applyFilters(snap.events, filters, snap.as_of) : []), [snap, filters]);
   const selected: VeilleEvent | null = selectedId ? (eventsById[selectedId] ?? null) : null;
 
-  if (!snap || !thr || !notif) return <p style={{ padding: 16 }}>Chargement de la maquette…</p>;
+  if (invalidApiMode !== null) return <ApiErrorScreen error={null} invalidMode={invalidApiMode} lastAttempt={null} onRetry={() => {}} />;
+  if (loadError) return <ApiErrorScreen error={loadError as ApiError} invalidMode={null} lastAttempt={lastAttempt} onRetry={() => setRetryKey((k) => k + 1)} />;
+  if (!snap || !thr || !notif) return <p style={{ padding: 16 }} role="status">Chargement…</p>;
 
   const ai = { ...snap.ai, mode: aiMode ?? snap.ai.mode, budget_exhausted: budgetOut ?? snap.ai.budget_exhausted };
   const saveThresholds = (changes: { key: string; to: number }[], reason: string) => void dataClient.saveThresholds(thr, changes, reason).then(setThr);
@@ -168,6 +199,7 @@ export default function App() {
       onCluster={setClusterIds}
       clusterIds={clusterIds}
       eventsById={eventsById}
+      demo={snap.demo}
     />
   );
   const card = <EventCard event={selected} view={view} offView={offView} onGoEurope={goEurope} onOpenDossier={openDossier} />;
@@ -185,7 +217,7 @@ export default function App() {
       <a className="skip" href="#main">
         Aller au contenu
       </a>
-      <DemoBar scenario={scenario} onScenario={changeScenario} />
+      {snap.demo && <DemoBar scenario={scenario} onScenario={changeScenario} />}
       <div className="shell">
         <header className="header">
           <div className="brand">
@@ -227,6 +259,12 @@ export default function App() {
         </nav>
 
         <main id="main" tabIndex={-1} className="stack">
+          {staleSince && (
+            <section className="banner method" role="status" data-testid="stale-banner">
+              <h2>Connexion à l’API perdue</h2>
+              <p>Les données affichées datent du <time dateTime={snap.as_of}>{fmt(snap.as_of)}</time> : elles ne sont plus actualisées. Nouvelle tentative automatique en cours.</p>
+            </section>
+          )}
           {snap.civil_alert && <CivilBanner alert={snap.civil_alert} />}
           {snap.method_changes.map((c) => (
             <MethodBanner key={c.at} change={c} />
@@ -333,7 +371,7 @@ export default function App() {
         </main>
 
         <footer className="footer">
-          VEILLE · maquette v0.1 · indice conventionnel, jamais une probabilité · aucun compte à rebours · {nonCalc ? 'indice courant non calculable' : `échelle ${gauge.policy.version} · ${thr.policy_version}`}
+          VEILLE{snap.demo ? ' · maquette v0.1' : ''} · indice conventionnel, jamais une probabilité · aucun compte à rebours · {nonCalc ? 'indice courant non calculable' : `échelle ${gauge.policy.version} · ${thr.policy_version}`}
         </footer>
       </div>
 

@@ -323,18 +323,35 @@ test.describe('réglages', () => {
     await open(page, 'nominal', 'reglages/sources');
     await expect(page.getByTestId('sources-status').locator('li.src-row')).toHaveCount(9);
   });
-  test('notifications : choix « officielles + A3 », interrupteur, canal non activé', async ({ page }) => {
+  test('notifications : silencieux jusqu’à la fin du pilote, niveau « officielles + A3 » conservé', async ({ page }) => {
     await open(page, 'nominal', 'reglages/notifications');
+    await expect(page.getByTestId('silent-banner')).toContainText('silencieux jusqu’à la fin du pilote');
+    await expect(page.getByTestId('silent-banner')).toContainText('rien n’est envoyé');
+    await expect(page.getByTestId('notif-enabled')).not.toBeChecked();
     await expect(page.getByLabel(/officielles \+ changements majeurs \(A3\)/)).toBeChecked();
     await expect(page.getByTestId('notifications')).toContainText('non activé');
-    await page.getByTestId('notif-enabled').uncheck();
-    await expect(page.getByLabel(/officielles seulement/)).toBeDisabled();
     await page.getByTestId('notif-enabled').check();
+    await expect(page.getByTestId('silent-banner')).toHaveCount(0);
+    await page.getByTestId('notif-enabled').uncheck();
+    await expect(page.getByTestId('silent-banner')).toBeVisible();
     await page.getByLabel(/analyses approfondies \(A2\)/).check();
     await expect(page.getByLabel(/analyses approfondies \(A2\)/)).toBeChecked();
   });
-  test('seuils : garde-fous (limites, confirmation, motif, historique, retour au plan, indicateur sur la jauge)', async ({ page }) => {
+  test('seuils GELÉS pendant le pilote : lecture seule, aucun bouton d’édition', async ({ page }) => {
     await open(page, 'nominal', 'reglages/seuils');
+    await expect(page.getByTestId('frozen-banner')).toContainText('gelés pendant le pilote');
+    await expect(page.getByTestId('frozen-banner')).toContainText('pilot_frozen');
+    await expect(page.getByTestId('thr-anomaly_mad_k')).toHaveAttribute('readonly', '');
+    await page.getByTestId('thr-anomaly_mad_k').fill('2.5', { timeout: 1500 }).catch(() => {});
+    await expect(page.getByTestId('thr-anomaly_mad_k')).toHaveValue('3');
+    await expect(page.getByTestId('thr-save')).toHaveCount(0);
+    await expect(page.getByTestId('thr-reset')).toHaveCount(0);
+    await expect(page.getByTestId('frozen-note')).toContainText('423');
+    await expect(page.getByTestId('thr-history')).toBeVisible(); // l'historique reste consultable
+  });
+  test('seuils (indicateur pilot_frozen levé) : garde-fous (limites, confirmation, motif, historique, retour au plan, indicateur sur la jauge)', async ({ page }) => {
+    await open(page, 'nominal', 'reglages/seuils', 'dark', '&pilot_frozen=0');
+    await expect(page.getByTestId('frozen-banner')).toHaveCount(0);
     await expect(page.getByTestId('comparability')).toContainText('moins comparables');
     await expect(page.getByTestId('thr-status')).toContainText('conformes au plan');
     await expect(page.getByTestId('thr-save')).toBeDisabled();

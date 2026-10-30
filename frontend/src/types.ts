@@ -118,7 +118,8 @@ export interface VeilleEvent {
   id: string;
   title: string;
   layer: LayerId;
-  fictional: true;
+  /** true = donnée de démonstration (mode maquette). En mode API réelle : false. */
+  fictional: boolean;
   reading_status: ReadingStatus;
   /** Raison d'exclusion si l'événement est exclu de l'analyse (inspectable). */
   exclusion: { reason: ExclusionReason; detail: string } | null;
@@ -296,6 +297,11 @@ export interface ThresholdChange {
 
 export interface ThresholdsState {
   policy_version: string;
+  /**
+   * Indicateur de configuration serveur (`pilot_frozen`) : seuils GELÉS pendant le pilote, en lecture seule.
+   * Aucun bouton de l'interface ne le débloque ; l'édition PUT/POST répond 423 tant qu'il vaut true.
+   */
+  pilot_frozen: boolean;
   items: ThresholdItem[];
   history: ThresholdChange[];
 }
@@ -303,7 +309,10 @@ export interface ThresholdsState {
 export type NotificationLevel = 'officiel' | 'officiel_a3' | 'officiel_a2_a3';
 
 export interface NotificationSettings {
+  /** false = mode silencieux : rien n'est envoyé, le niveau choisi est conservé. */
   enabled: boolean;
+  /** Mode silencieux imposé jusqu'à la fin du pilote (2 à 4 semaines, plan §13). */
+  silent_until_pilot_end: boolean;
   level: NotificationLevel;
   channel: 'telegram';
   /** Le bot n'est activé qu'au lot 7 : l'interface seule existe. */

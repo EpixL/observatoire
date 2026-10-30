@@ -29,7 +29,7 @@ for (const theme of ['dark', 'light'] as const) {
     await page.getByRole('button', { name: 'Comprendre l’échelle' }).click();
     await run('dialogue échelle');
     await page.keyboard.press('Escape');
-    await open(page, 'seuils', 'reglages/seuils', theme);
+    await open(page, 'seuils', 'reglages/seuils', theme, '&pilot_frozen=0');
     await page.getByTestId('thr-reset').click();
     await run('dialogue seuils');
   });

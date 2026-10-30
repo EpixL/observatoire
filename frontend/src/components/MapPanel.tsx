@@ -33,7 +33,7 @@ interface Props {
   onCluster: (ids: string[]) => void;
   clusterIds: string[];
   eventsById: Record<string, VeilleEvent>;
-  tall?: boolean;
+  demo: boolean;
 }
 
 export function MapPanel(p: Props) {
@@ -145,7 +145,7 @@ export function MapPanel(p: Props) {
         {layersPanel}
         <div>
           <div className="map-frame">
-            <span className="map-badge">Données fictives</span>
+            {p.demo && <span className="map-badge">Données fictives</span>}
             {showOverseas ? (
               <div className="overseas" data-testid="overseas">
                 {OVERSEAS.map((o) => (

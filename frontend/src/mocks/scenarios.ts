@@ -195,9 +195,15 @@ export const PLAN_THRESHOLDS: ThresholdItem[] = [
   TH('baseline_weeks', 'Référence minimale', 'Semaines comparables nécessaires avant de conclure à une anomalie ; sinon « référence insuffisante » (§5).', 'semaines', 8, 4, 12, 1, 'Détection d’anomalie'),
 ];
 
+/** Simule l'indicateur de configuration serveur `pilot_frozen` : gelé par défaut ; `?pilot_frozen=0` le lève (maquette seulement). */
+function pilotFrozen(): boolean {
+  return typeof window === 'undefined' ? true : new URLSearchParams(window.location.search).get('pilot_frozen') !== '0';
+}
+
 function thresholds(scn: string): ThresholdsState {
   const items = PLAN_THRESHOLDS.map((x) => ({ ...x }));
-  if (scn !== 'seuils') return { policy_version: 'seuils-v1', items, history: [] };
+  const pilot_frozen = pilotFrozen();
+  if (scn !== 'seuils') return { policy_version: 'seuils-v1', pilot_frozen, items, history: [] };
   const set = (k: string, v: number) => (items.find((x) => x.key === k)!.value = v);
   set('anomaly_mad_k', 2.5);
   set('downgrade_evals', 1);
@@ -205,10 +211,10 @@ function thresholds(scn: string): ThresholdsState {
     { id: 'T-2', at: t(2 * 24), kind: 'modification', key: 'downgrade_evals', label: 'Réévaluations stables avant une baisse', from: 2, to: 1, reason: 'Essai : réduire les oscillations constatées sur la mesure Internet.', actor: 'David', policy_version: 'seuils-v3' },
     { id: 'T-1', at: t(5 * 24), kind: 'modification', key: 'anomaly_mad_k', label: 'Écart de détection d’anomalie', from: 3, to: 2.5, reason: 'Essai : détecter plus tôt les chutes de connectivité.', actor: 'David', policy_version: 'seuils-v2' },
   ];
-  return { policy_version: 'seuils-v3', items, history };
+  return { policy_version: 'seuils-v3', pilot_frozen, items, history };
 }
 
-const NOTIFICATIONS: NotificationSettings = { enabled: true, level: 'officiel_a3', channel: 'telegram', channel_state: 'non_active' };
+const NOTIFICATIONS: NotificationSettings = { enabled: false, silent_until_pilot_end: true, level: 'officiel_a3', channel: 'telegram', channel_state: 'non_active' };
 
 /* ---------- Historique en escalier ---------- */
 

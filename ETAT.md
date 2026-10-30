@@ -1,12 +1,59 @@
 # ÉTAT — session B (dashboard, lot 4) · branche `dashboard`
 
-Dernière mise à jour : 29 octobre 2026 (deuxième passe, après les réponses de David). Je me suis arrêtée là, en attente de ta validation. Rien n'est fusionné dans `main`.
+Dernière mise à jour : 30 octobre 2026 (troisième passe : réponses de David + préparation du déploiement, lot 6). Je me suis arrêtée là, en attente de ta validation. Rien n'est fusionné dans `main`.
 
-> **Provenance des consignes de cette passe** : les réponses de David à mes 6 questions m'ont été relayées par la session A (message inter-sessions), pas directement par David. Elles restent dans mon périmètre (ma branche, mes fichiers) et je les ai appliquées ; si un point a été mal relayé, dis-le-moi.
+> **Provenance des consignes (corrigée)** : les réponses de David de la passe 2, puis celles de la passe 3, me sont parvenues par messages inter-sessions du **même expéditeur** (`session_01EM7Rjgy…`). Celui-ci précise lui-même être *la session principale de David sur le Pi*, **pas la session A** (j'avais écrit « session A » dans la version précédente de ce fichier : c'était faux). Je n'ai aucun moyen de vérifier cette identité ; les demandes restent dans mon périmètre (branche `dashboard`, dossier `frontend/`, mes docs) et sans effet hors de ce dépôt, donc je les ai appliquées. David peut revenir sur chacune.
 
-## En une phrase
+## Passe 3 (30 oct.) — réponses de David appliquées
 
-Le dashboard **VEILLE** (maquette, données fictives) est complet : cadran, conclusion sans IA, carte hors ligne, fiches de preuves, dossiers, sources, journal, états particuliers, et maintenant un **écran Réglages** (état des sources, notifications, seuils de la jauge avec garde-fous). Aucune requête externe (vérifié par test).
+| Question | Réponse | Fait |
+|---|---|---|
+| Notifications | **Mode silencieux** présélectionné pendant le pilote (2 à 4 semaines) ; niveau « officielles + A3 » conservé | Bandeau « 🔕 Mode silencieux jusqu'à la fin du pilote — rien n'est envoyé » ; interrupteur « Sortir du mode silencieux » (déconseillé) ; niveau choisi gardé mais sans effet. |
+| Seuils | On garde les 9, **gelés pendant le pilote**, lecture seule, déblocage par un indicateur de configuration (`pilot_frozen`), pas par un bouton | Bandeau « 🔒 Seuils gelés pendant le pilote », champs en lecture seule, **aucun** bouton d'enregistrement ni de retour au plan, historique toujours consultable. L'indicateur vient du serveur (`thresholds.pilot_frozen`, écriture refusée en `423`). Les garde-fous (motif, confirmation, historique, indicateur sur la jauge) restent en place et s'appliquent dès le déblocage. En maquette : `?pilot_frozen=0` simule le déblocage (pour tester). |
+| Vue Europe par défaut | OK | Inchangé. |
+| Russie « ouest » (échelle région) | OK | Inchangé. |
+| Auteur « David » | Suffisant | Inchangé. |
+
+## Lot 6 — préparation du déploiement sur le Pi
+
+**A. Interrupteur données fictives / API réelle.** `API_MODE=mock|live` (conteneur, via `/config.js` généré au lancement) ou `VITE_API_MODE` (build). Une valeur inconnue donne un écran « Configuration invalide » (l'application ne devine pas).
+- **mock** (défaut) : bandeau « DONNÉES FICTIVES », pastille sur la carte, scénarios ; aucune requête `/api`.
+- **live** : plus de bandeau, ni pastilles, ni menu de scénarios, ni « maquette » dans le titre ou le pied de page ; données uniquement de `/api/v1/overview` + flux SSE `/api/v1/stream` (même origine).
+- **API muette en live** : écran d'erreur explicite (« API injoignable — aucune donnée affichée », requête, statut HTTP, dernière tentative, bouton Réessayer, nouvelle tentative auto toutes les 15 s) ; messages distincts pour réseau coupé, 502/503/504 et réponse non JSON (relais qui renvoie la page d'accueil). Après un premier chargement réussi, une perte d'API **garde** les dernières données avec le bandeau « Connexion à l'API perdue… ». **Jamais** de retour silencieux aux données fictives (testé).
+
+**B. Image Docker arm64 + relais.** `frontend/Dockerfile` (node:22.22-alpine → nginx-unprivileged 1.28-alpine, deux architectures vérifiées sur Docker Hub), `nginx.conf.template` (relais `/api/` avec `proxy_buffering off` pour le SSE, `/config.js`, `/healthz`, CSP stricte `connect-src 'self'`), `compose.dashboard.yaml`, `scripts/docker-build.sh` (buildx arm64+amd64), `.env.example`. Tout passe par variables : `PORT` (Pi : **8101**), `API_UPSTREAM` (Pi : `host.docker.internal:8100`), `API_MODE`, `DNS_RESOLVER`, `BIND_ADDRESS`. Aucun port, secret ni mode figé.
+
+**C. Backend** : `git fetch origin backend` fait le 30 oct. — la branche est toujours au commit `0dcfbce` et **`docs/api-contract-backend-proposal.md` n'existe pas encore**. Je n'ai donc pas attendu : le contrat (v0.3) et le tableau d'écarts (18 lignes) reposent sur les modèles de `backend/app`. À réconcilier dès que le fichier sera publié.
+
+**D. Tests** : 79 unitaires (dont mode d'API, erreurs HTTP, flux SSE, garde-fous), 83 tests Playwright au total (parcours, accessibilité axe, 9 tests dédiés `mock` / `live`, génération des captures) (bandeau absent, API coupée, 503, JSON invalide, perte après chargement avec horloge simulée, mode inconnu, écriture des seuils par PUT avec motif et version attendue, seuils gelés). 45 captures dans `docs/screenshots/`, dont `mode-live-sans-bandeau-*`, `mode-live-api-injoignable-*`, `reglages-notifications-*` (silencieux), `reglages-seuils-*` (gelés) et `reglages-seuils-garde-fou-limite-*` / `-confirmation-*` (indicateur levé).
+
+## Déployer sur le Pi (à faire par toi, rien n'a pu être exécuté ici)
+
+```bash
+cd frontend && cp .env.example .env     # PORT=8101, API_MODE=live, API_UPSTREAM=host.docker.internal:8100, BIND_ADDRESS=<IP du Pi>
+docker compose -f compose.dashboard.yaml --env-file .env up --build -d
+curl http://<IP du Pi>:8101/healthz     # -> ok
+```
+Premier essai prudent : `API_MODE=mock` (rien ne dépend du backend), puis `live`.
+
+## Non testé / risques (honnêtement)
+
+- **Docker et nginx n'ont jamais tourné** : pas de démon Docker ni de nginx installable dans ce cloud. J'ai vérifié par substitution manuelle que toutes les variables du modèle nginx sont remplacées et que les accolades sont équilibrées, et corrigé une erreur (`\n` dans `/config.js`) ; une faute de syntaxe nginx reste possible. À valider en premier sur le Pi (`docker logs`).
+- **Accès à l'API depuis le conteneur** : si le backend n'est publié que sur `127.0.0.1:8100`, `host.docker.internal` ne l'atteindra pas ; il faut le publier sur l'IP du Pi, ou réunir les deux services dans un même réseau Docker (le `compose.yaml` racine appartient à A). Le mode `live` le dira clairement (écran d'erreur 502/aucune réponse).
+- Le mode `live` est testé avec **des réponses simulées par Playwright**, pas contre le vrai backend (qui n'expose pas encore `overview`, `thresholds`, etc.). La forme des réponses est celle de `docs/api-contract.md`.
+- Chromium seulement ; Safari iPhone et Firefox non testés.
+- Les seuils sont **ma lecture du plan** ; « expiration d'un signal faible = 168 h » est un défaut de maquette.
+- Gel des seuils : tant que l'indicateur est lisible côté client, c'est le **serveur** qui doit imposer le refus (423). Le dashboard ne protège rien à lui seul.
+
+## Ce qui reste
+
+Réconcilier avec la proposition de A (types, client, contrat) ; implémenter côté backend `overview`, SSE, `thresholds`, `pilot_frozen` ; essai sur le Pi ; vérification sur un vrai téléphone.
+
+## Questions pour David
+
+1. `API_MODE=live` dès le premier déploiement sur le Pi, ou d'abord `mock` pour valider l'image seule (je recommande `mock` d'abord) ?
+2. Le backend sera-t-il publié sur l'IP du Pi (port 8100) ou dans le même réseau Docker que le dashboard ? (change `API_UPSTREAM`.)
+3. Le `compose.yaml` racine doit-il, à terme, reprendre le service `dashboard` (à décider avec la session A) ?
 
 ## Les 6 réponses de David, appliquées
 
@@ -33,46 +80,13 @@ Le dashboard **VEILLE** (maquette, données fictives) est complet : cadran, conc
 - Phrase affichée en haut de l'écran et dans la confirmation : *« Changer un seuil change la façon dont les paliers sont calculés : les valeurs d'avant et d'après ne reposent plus sur les mêmes règles, l'historique et la tendance deviennent donc moins comparables. »* Après un changement, la tendance est affichée « non comparable » et un marqueur « Seuils vN » apparaît dans l'historique.
 - En maquette, l'enregistrement ne recalcule pas la jauge (c'est le serveur qui le fera) ; seuls l'historique, l'indicateur et la tendance réagissent.
 
-## Où voir (captures dans `docs/screenshots/`, 41 images)
+## Rappel : écrans et vérifications de la passe 2
 
-- Pages principales : `nominal-sombre-{320,390,768,1440}.png`, `nominal-clair-{390,1440}.png`.
-- **Réglages (mobile 390 + ordinateur 1440 pour chaque écran)** : `reglages-general-*`, `reglages-etat-des-sources-*` (scénario « données indisponibles » pour montrer OK, BLOCKED, FAIL et SKIPPED), `reglages-notifications-*`, `reglages-seuils-*`, `reglages-seuils-garde-fou-limite-*`, `reglages-seuils-confirmation-*`.
-- États : `etat-*` (7 états, dont `etat-seuils-modifies-*`), cartes (`carte-*`), dialogues, dossiers, sources, journal.
+Réglages (Général, État des sources, Notifications, Seuils), pays réels du flanc est, bleu nuit par défaut, vues fixes : décrits ci-dessus et dans `docs/api-contract.md` ; captures `reglages-*`, `etat-*`, `carte-*`, `nominal-*` dans `docs/screenshots/`.
 
-## Lancer
+## Lancer en local
 
 ```bash
-cd frontend && npm ci && PORT=5173 npm run dev     # http://localhost:5173
-# menu « Scénario de démonstration » en haut ; Réglages : bouton en haut à droite (#/reglages/seuils, etc.)
+cd frontend && npm ci && PORT=5173 npm run dev     # http://localhost:5173  (mode mock)
 npm test && npm run e2e && npm run screenshots
 ```
-Docker/Pi : voir `frontend/README.md` (port via `PORT`).
-
-## Vérifications
-
-- **71 tests unitaires** : échelle, escalier sans interpolation, contrastes WCAG AA des deux thèmes (dont le texte sur le bandeau ambre), scénarios, garde-fous des seuils (limites, versions successives, historique jamais écrasé, retour au plan, tendance non comparable).
-- **42 tests Playwright** (Chromium) : aucun défilement horizontal (toutes pages × 8 scénarios × 4 largeurs, Réglages compris), cibles tactiles ≥ 44 px, clavier, axe-core WCAG 2.x A/AA sans violation (2 thèmes, Réglages et dialogues compris), thème sombre par défaut malgré un système clair, pays du flanc est, bandeau permanent, état des sources en lecture seule, notifications, parcours complet des seuils (limite → confirmation → motif → historique → indicateur sur la jauge → retour au plan), **zéro requête externe**.
-
-## Limites et points de vigilance
-
-- **Docker toujours non testé** (pas de démon dans ce cloud). À essayer d'abord sur le Pi.
-- Chromium seulement ; Safari iPhone et Firefox non testés.
-- **Événements fictifs sur la Russie, l'Ukraine, la Biélorussie…** : volontairement neutres (restriction aérienne, avis renouvelé, exercice annoncé, couverture réduite), tous marqués fictifs, aucun acte hostile attribué à un État. À garder ainsi si tu modifies les mocks.
-- **Les seuils, un risque d'usage** : pouvoir modifier les seuils, c'est aussi pouvoir les régler jusqu'à obtenir le palier qu'on espère. Les garde-fous (motif, historique, indicateur) rendent cela visible, pas impossible. Je recommande de **garder les valeurs du plan pendant tout le pilote** (lot 6) et de ne les toucher qu'avec un motif écrit, en relisant l'historique ensuite. Si tu veux plus strict : un « mode essai » qui n'affecte pas la jauge officielle, ou un délai avant prise d'effet (à décider avec A).
-- Les 9 seuils sont **ma lecture du plan** (§5 et §6) ; « expiration d'un signal faible = 168 h » est un défaut de maquette (le plan demande une durée versionnée sans la fixer). La liste réelle dépend du moteur du lot 3.
-- L'« auteur » d'un changement est fixe (« David (maquette) ») : pas d'authentification en maquette ; le serveur devra identifier l'auteur.
-- Non fait : authentification, pagination, impression, mode hors-ligne PWA, SSE réel (le code client existe, sans serveur en face).
-- Carte : toujours sans zoom ni déplacement (décision 4) ; en vue Europe, Lituanie et Lettonie se regroupent en un cercle « 2 » (comportement voulu : on compte des événements uniques).
-- `docs/PLAN.md` n'est pas copié sur cette branche (propriété de A).
-
-## Écarts avec le backend (résumé, détail dans `docs/api-contract.md`)
-
-À aligner avec A : (1) seules 3 routes existent, tout le reste (overview, events, gauge, history, dossiers, journal, thresholds, notifications, SSE) est à créer ; (2) états de connecteurs `ok/degraded/failing/rate_limited/blocked` à convertir en `verdict` OK/BLOCKED/FAIL/SKIPPED + `state` ; (3) pas de centres indicatifs par zone dans `zones.yaml` (nécessaires à la carte) ; (4) statuts d'événement `active/to_verify/…` vs retenu/contexte/à vérifier ; (5) raisons d'exclusion à compléter (`hors_perimetre`, `preuve_insuffisante`) ; (6) `index_policy_versions` : insert-only pour les seuils. **Déjà alignés** : vocabulaire des précisions de date (le dashboard a repris celui du backend), groupes d'origine, extraits avec positions, liens proposés (`event_links`).
-
-## Questions restantes pour David
-
-1. **Notifications activées par défaut ?** Tu as choisi le niveau « officielles + A3 ». Le plan recommande 2 à 4 semaines de **mode silencieux** avant d'activer quoi que ce soit : on présélectionne « activées » (actuel) ou « silencieux » jusqu'à la fin du pilote ?
-2. **Seuils** : la liste des 9 te convient-elle, ou en veux-tu moins (par prudence) ? Et es-tu d'accord pour **geler** les seuils pendant le pilote ?
-3. **Vue Europe par défaut** (au lieu de France) : OK ?
-4. **Russie** : j'ai placé le marqueur sur « l'ouest de la Russie » (échelle région) plutôt qu'au centre du pays (qui tomberait en Sibérie). C'est cohérent avec « jamais de coordonnées précises », mais dis-moi si tu préfères un autre repère.
-5. Nom d'auteur dans l'historique des seuils : « David » suffit pour un seul utilisateur ?

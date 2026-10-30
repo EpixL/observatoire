@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { buildSnapshot } from '../src/mocks/scenarios';
 import { open } from './helpers';
 
 // Régénère docs/screenshots/ : `npm run screenshots`
@@ -61,7 +62,7 @@ for (const w of [390, 1440]) {
   }
   test(`réglages seuils : confirmation ${w}px`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
-    await open(page, 'nominal', 'reglages/seuils', 'dark');
+    await open(page, 'nominal', 'reglages/seuils', 'dark', '&pilot_frozen=0');
     await page.getByTestId('thr-anomaly_mad_k').fill('9');
     await page.screenshot({ path: `${OUT}reglages-seuils-garde-fou-limite-${w}.png` });
     await page.getByTestId('thr-anomaly_mad_k').fill('2.5');
@@ -104,3 +105,27 @@ test('captures carte, outre-mer, dialogues, autres pages', async ({ page }) => {
   await page.evaluate(() => document.querySelector('[data-testid=map-panel]')!.scrollIntoView());
   await page.screenshot({ path: `${OUT}carte-mobile-390.png` });
 });
+
+// Mode API réelle : réponses simulées par Playwright (aucun backend n'est lancé). Pas de bandeau « fictif » ; erreur explicite si l'API ne répond pas.
+for (const w of [390, 1440]) {
+  test(`mode live ${w}px : tableau de bord et erreur`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: w >= 1100 ? 900 : 844 });
+    await page.addInitScript(() => {
+      window.__VEILLE__ = { apiMode: 'live' };
+      window.localStorage.setItem('veille-theme', 'dark');
+    });
+    await page.route('**/api/v1/stream', (r) => r.abort());
+    await page.route('**/api/v1/overview*', (r) => r.abort());
+    await page.goto('/#/vue');
+    await page.getByTestId('api-error').waitFor();
+    await page.screenshot({ path: `${OUT}mode-live-api-injoignable-${w}.png` });
+    const base = buildSnapshot('nominal');
+    const snap = { ...base, demo: false, events: base.events.map((e) => ({ ...e, fictional: false })) };
+    await page.unroute('**/api/v1/overview*');
+    await page.route('**/api/v1/overview*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(snap) }));
+    await page.getByTestId('api-retry').click();
+    await page.locator('.gauge').waitFor();
+    await page.addStyleTag({ content: FLAT });
+    await page.screenshot({ path: `${OUT}mode-live-sans-bandeau-${w}.png`, fullPage: w < 1100 ? false : false });
+  });
+}
