@@ -21,6 +21,7 @@ class Gazetteer:
     def __init__(self, data: dict):
         self.french_territory: set[str] = set(data["french_territory"])
         self.parent: dict[str, str] = {z["code"]: z["parent"] for z in data["zones"] if z.get("parent")}
+        self.centers: dict[str, tuple[float, float]] = {z["code"]: tuple(z["center"]) for z in data["zones"] if z.get("center")}
         self.region: dict[str, str] = {z["code"]: z.get("region", "") for z in data["zones"]}
         pairs = [(name, z["code"]) for z in data["zones"] for name in z["names"]]
         pairs.sort(key=lambda p: -len(p[0]))  # le nom le plus long gagne (« Corée du Nord » avant « Corée »)

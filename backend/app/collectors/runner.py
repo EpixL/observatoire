@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 import re
 import signal
@@ -150,6 +151,11 @@ def serve(factory: sessionmaker[Session], settings: Settings, *, tick_s: float =
         from app.events.gazetteer import load_gazetteer
         from app.events.pipeline import process_pending
         gaz = load_gazetteer(str(settings.config_dir / "zones.yaml"))
+        from app.gauge.config import load_gauge_config
+        from app.gauge.snapshots import evaluate_all
+        gauge_cfg = load_gauge_config(str(settings.config_dir))
+        gauge_every = float(os.environ.get("GAUGE_EVAL_INTERVAL_S", "300"))
+        last_gauge = -1e9
         last_purge = 0.0
         while not stop["flag"]:
             outcomes = run_due(factory, http, settings)
@@ -160,6 +166,14 @@ def serve(factory: sessionmaker[Session], settings: Settings, *, tick_s: float =
                     log.info("événements : %s", done)
             except Exception:
                 log.exception("échec du traitement des événements (la collecte continue)")
+            if time.monotonic() - last_gauge >= gauge_every:   # réévaluation de la jauge (un instantané daté par territoire)
+                last_gauge = time.monotonic()
+                try:
+                    with session_scope(factory) as s:
+                        snaps = evaluate_all(s, gauge_cfg, utcnow())
+                        log.info("jauge : %s", {x.territory: (x.palier if x.status == "calculable" else "non calculable") for x in snaps})
+                except Exception:
+                    log.exception("échec de l'évaluation de la jauge (la collecte continue)")
             if time.monotonic() - last_purge > 86_400:  # purge quotidienne des snapshots bruts au-delà de la rétention
                 last_purge = time.monotonic()
                 try:

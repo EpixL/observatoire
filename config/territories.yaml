@@ -1,0 +1,11 @@
+# Territoires évalués par la jauge. La CAMÉRA de la carte et le TERRITOIRE évalué sont deux choses distinctes (plan §10).
+# `zones` = codes de zone (racine, cf. config/zones.yaml) dont les événements comptent pour ce territoire.
+# Une attaque hors de ces zones n'est PAS une attaque sur le territoire (plan §13).
+territories:
+  - id: FR
+    label: France (métropole et outre-mer)
+    default: true
+    zones: [FR]                     # config/zones.yaml rattache l'outre-mer à FR
+  - id: flanc-est
+    label: Flanc est de l'Europe
+    zones: [UA, RU, BY, PL, LT, LV, EE, MD]     # décision de David du 29/10/2026 (zone secondaire unique)

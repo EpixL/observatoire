@@ -1,0 +1,57 @@
+# Échelle de l'Indice de confrontation armée (plan §6) et SEUILS réglables.
+#
+# - Les 8 paliers et les définitions de 0 et de 100 ne sont PAS des seuils modifiables (ils changeraient le sens de l'indice).
+# - Les seuils ci-dessous sont les valeurs du PLAN : ils servent de version 1 (« seuils-v1 ») et de cible de réinitialisation.
+#   Les valeurs en vigueur vivent en base (table index_policy_versions, insert-only) ; chaque modification crée une nouvelle version datée.
+# - Les clés (key) sont celles du dashboard (frontend/src/mocks/scenarios.ts, branche dashboard) : ne pas les renommer sans coordination.
+#
+# Un seuil est une valeur de PRODUIT à tester, pas une norme géopolitique (plan §6.3).
+
+paliers:
+  - {value: 0,   label: "Aucun signal qualifiant observé",
+     definition: "Couverture de référence satisfaite ; aucun critère actif, aucune situation majeure non résolue. Ne prouve ni la paix ni un risque nul."}
+  - {value: 10,  label: "Signal isolé",
+     definition: "Observation pertinente vérifiable, insuffisante pour distinguer incident ordinaire et tension ; la pure rhétorique est plafonnée ici."}
+  - {value: 25,  label: "Tension documentée",
+     definition: "Acte matériel ou mesure concrète de tension, lié au périmètre et documenté (preuve directe, ou plusieurs origines indépendantes) ; pas seulement davantage d'articles."}
+  - {value: 40,  label: "Convergence préoccupante",
+     definition: "Plusieurs événements matériels distincts, plusieurs familles d'indicateurs, origines indépendantes, même zone et même fenêtre ; une explication commune ordinaire ne suffit pas à tout expliquer."}
+  - {value: 55,  label: "Préparation à une crise majeure",
+     definition: "Changement matériel de posture publiquement documenté ET mesure civile ou diplomatique de précaution liée ; l'alternative exercice/défense est examinée."}
+  - {value: 70,  label: "Action hostile grave documentée",
+     definition: "Acte hostile grave contre la zone établi (faits, zone, période, acteur documentés séparément) après validation humaine ; ni simple panne ni simple accusation."}
+  - {value: 85,  label: "Attaque armée directe établie",
+     definition: "Au moins une attaque armée directe par un État ou une force étatique sur la zone, établie après validation humaine ; caractère durable non établi."}
+  - {value: 100, label: "Conflit armé direct en cours",
+     definition: "Hostilités étatiques organisées et durables établies dans la zone (campagne de frappes ou engagements corroborés) ; l'indice sature."}
+
+thresholds:
+  - {key: anomaly_mad_k, label: "Écart de détection d'anomalie", unit: dispersions, plan: 3, min: 2, max: 6, step: 0.5,
+     affects: "Détection d'anomalie des séries numériques (non branchée au lot 3 : aucune série collectée)",
+     description: "Une mesure est anormale au-delà de ce nombre de dispersions robustes (MAD) par rapport à sa référence. Réglage expérimental du plan (§5), pas un seuil scientifiquement validé."}
+  - {key: anomaly_windows, label: "Durée minimale d'une anomalie", unit: fenêtres, plan: 3, min: 1, max: 8, step: 1,
+     affects: "Détection d'anomalie des séries numériques (non branchée au lot 3)",
+     description: "Nombre de fenêtres consécutives pendant lesquelles l'écart doit durer."}
+  - {key: origins_for_25, label: "Origines indépendantes pour le palier 25", unit: origines, plan: 2, min: 2, max: 4, step: 1,
+     affects: "Palier 25 et au-dessus",
+     description: "Sans preuve directe, nombre minimal d'origines réellement indépendantes rapportant le fait (§6.3)."}
+  - {key: events_for_40, label: "Événements matériels distincts pour le palier 40", unit: événements, plan: 2, min: 2, max: 5, step: 1,
+     affects: "Palier 40", description: "Même zone, même fenêtre (§6.3)."}
+  - {key: families_for_40, label: "Familles d'indicateurs pour le palier 40", unit: familles, plan: 2, min: 2, max: 4, step: 1,
+     affects: "Palier 40", description: "Familles distinctes (autorités, faits régionaux, mesure technique…)."}
+  - {key: downgrade_evals, label: "Réévaluations stables avant une baisse", unit: réévaluations, plan: 2, min: 1, max: 6, step: 1,
+     affects: "Baisses de palier",
+     description: "Un retour sous un seuil doit rester stable pendant ce nombre de réévaluations (§6.4). Les hausses graves ne sont jamais retardées ; une correction factuelle s'applique immédiatement."}
+  - {key: weak_signal_expiry_h, label: "Expiration d'un signal faible", unit: heures, plan: 168, min: 24, max: 720, step: 24,
+     affects: "Paliers 10 et 25",
+     description: "Durée avant qu'un signal faible n'expire. L'expiration n'établit pas le retour à la normale. Les paliers 70, 85 et 100 n'expirent jamais d'eux-mêmes : ils ne baissent que sur résolution documentée."}
+  - {key: coverage_families, label: "Familles obligatoires pour autoriser le palier 0", unit: familles, plan: 3, min: 3, max: 6, step: 1,
+     affects: "Palier 0 / état non calculable",
+     description: "Profil de couverture du pilote (§6.4) : en dessous, l'indice est « non calculable », jamais 0. Si la valeur dépasse le nombre de familles du profil, le palier 0 devient inatteignable (choix prudent)."}
+  - {key: baseline_weeks, label: "Référence minimale", unit: semaines, plan: 8, min: 4, max: 12, step: 1,
+     affects: "Couverture (référence quantitative) et détection d'anomalie",
+     description: "Semaines de collecte réelle nécessaires avant d'autoriser « 0 » ; sinon « référence insuffisante » (§5). Aucun historique n'est fabriqué."}
+  - {key: convergence_window_h, label: "Fenêtre de convergence", unit: heures, plan: 72, min: 24, max: 168, step: 24,
+     affects: "Palier 40 et 55", description: "Deux événements ne convergent que s'ils sont séparés de moins que cette durée."}
+  - {key: coverage_freshness_h, label: "Fraîcheur maximale d'une source essentielle", unit: heures, plan: 6, min: 1, max: 48, step: 1,
+     affects: "Couverture", description: "Une source essentielle est « à jour » si son dernier succès date de moins que cette durée (ou si son secours l'est)."}

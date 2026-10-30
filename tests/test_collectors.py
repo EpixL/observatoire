@@ -11,7 +11,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.collectors.runner import due_source_ids, run_due, run_source, sanitize_error
 from app.db import session_scope
-from app.models import ConnectorHealth, Document, DocumentVersion, FetchRun, Observation
+from app.models import ConnectorHealth, Document, DocumentVersion, FetchRun, Observation, Source
 
 from conftest import fixture_bytes, make_client
 
@@ -223,7 +223,15 @@ def test_robots_allow_lets_pages_through(sources, settings, clock, rng):
     assert run_source(sources, "france-diplomatie-cv", http, settings, clock=clock, rng=rng).outcome == "ok"
 
 
+def only_france(factory, sid="ioda-fr"):
+    """La config réelle interroge 9 entités ; ces tests de forme n'en servent qu'une."""
+    with session_scope(factory) as s:
+        src = s.get(Source, sid)
+        src.options = {**src.options, "entities": [{"type": "country", "code": "FR"}]}
+
+
 def test_ioda_events_documents_and_observations(sources, settings, clock, rng):
+    only_france(sources)
     url = lambda r: httpx.Response(200, headers={"content-type": "application/json"}, content=fixture_bytes("json/ioda_events_fr.json"))
     seen = []
     def handler(request):
@@ -327,7 +335,7 @@ def test_registry_sync_is_idempotent_and_keeps_health(sources):
         h.consecutive_failures = 3
     with session_scope(sources) as s:
         out = sync_sources(s, load_source_configs(ROOT / "config" / "sources.yaml"))
-        assert out == {"created": 0, "updated": 10}
+        assert out == {"created": 0, "updated": 11}
     assert health(sources, "ioda-fr").consecutive_failures == 3
 
 

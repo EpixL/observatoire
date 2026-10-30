@@ -1,0 +1,22 @@
+# Profil de couverture par territoire (plan §6.4). Il décide si « 0 » est autorisé ; il n'estime pas la part du monde observable.
+# Une famille est satisfaite si CHAQUE source essentielle est à jour (dernier succès < coverage_freshness_h) ou remplacée
+# par son secours. Une source désactivée, bloquée ou en échec n'est pas « à jour ».
+# Référence quantitative : la source `baseline_source` doit avoir au moins `baseline_weeks` semaines de collecte réussie.
+profiles:
+  FR: &profil_pilote
+    baseline_source: ioda-fr
+    families:
+      - id: autorites_mesures
+        label: Autorités et mesures
+        essential:
+          - {source: easa-czib}
+          - {source: france-diplomatie-cv}
+      - id: faits_regionaux
+        label: Faits régionaux corroborables
+        essential:
+          - {source: france24-fr}
+      - id: mesure_technique
+        label: Mesure technique
+        essential:
+          - {source: ioda-fr}
+  flanc-est: *profil_pilote

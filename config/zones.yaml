@@ -1,5 +1,6 @@
 # Gazetier minimal et explicite (lot 2). Chaque entrée : code ISO 3166-1 alpha-2, noms/alias reconnus
 # (correspondance de mots entiers, insensible à la casse), parent éventuel.
+# `center` = centre INDICATIF du pays (lon, lat), à l'échelle du pays seulement : jamais présenté comme une position précise.
 # `demonyms` = adjectifs de nationalité : reconnus comme ACTEURS (jamais comme lieux).
 # Un lieu absent d'ici n'est PAS deviné : le texte du lieu est conservé tel quel, sans code (« non localisé »).
 # Liste de départ à valider/étendre avec David (zones secondaires = question ouverte, voir docs/cadrage.md).
@@ -7,78 +8,78 @@
 french_territory: [FR, GP, MQ, GF, RE, YT, PM, BL, MF, NC, PF, WF, TF]   # métropole + outre-mer (plan §6.1)
 
 zones:
-  - {code: FR, names: [France, "France métropolitaine", "territoire français", "territoire national", Hexagone], demonyms: [français, française, French], region: europe}
-  - {code: GP, names: [Guadeloupe], parent: FR, region: outre-mer}
-  - {code: MQ, names: [Martinique], parent: FR, region: outre-mer}
-  - {code: GF, names: [Guyane, "Guyane française", "French Guiana"], parent: FR, region: outre-mer}
-  - {code: RE, names: [La Réunion, Réunion], parent: FR, region: outre-mer}
-  - {code: YT, names: [Mayotte], parent: FR, region: outre-mer}
-  - {code: PM, names: [Saint-Pierre-et-Miquelon], parent: FR, region: outre-mer}
-  - {code: BL, names: [Saint-Barthélemy], parent: FR, region: outre-mer}
-  - {code: MF, names: [Saint-Martin], parent: FR, region: outre-mer}
-  - {code: NC, names: [Nouvelle-Calédonie, "New Caledonia"], parent: FR, region: outre-mer}
-  - {code: PF, names: [Polynésie française, "French Polynesia"], parent: FR, region: outre-mer}
-  - {code: WF, names: [Wallis-et-Futuna], parent: FR, region: outre-mer}
-  - {code: TF, names: [TAAF, "Terres australes et antarctiques françaises"], parent: FR, region: outre-mer}
-  - {code: UA, names: [Ukraine], demonyms: [ukrainien, ukrainienne, ukrainiens, ukrainiennes, Ukrainian], region: europe}
-  - {code: RU, names: [Russie, Russia, "Fédération de Russie"], demonyms: [russe, russes, Russian], region: europe}
-  - {code: BY, names: [Biélorussie, Bélarus, Belarus], demonyms: [biélorusse, biélorusses, Belarusian], region: europe}
-  - {code: PL, names: [Pologne, Poland], demonyms: [polonais, polonaise, Polish], region: europe}
-  - {code: LT, names: [Lituanie, Lithuania], region: europe}
-  - {code: LV, names: [Lettonie, Latvia], region: europe}
-  - {code: EE, names: [Estonie, Estonia], region: europe}
-  - {code: FI, names: [Finlande, Finland], region: europe}
-  - {code: SE, names: [Suède, Sweden], region: europe}
-  - {code: NO, names: [Norvège, Norway], region: europe}
-  - {code: DK, names: [Danemark, Denmark], region: europe}
-  - {code: DE, names: [Allemagne, Germany], demonyms: [allemand, allemande, German], region: europe}
-  - {code: BE, names: [Belgique, Belgium], region: europe}
-  - {code: NL, names: [Pays-Bas, Netherlands], region: europe}
-  - {code: GB, names: [Royaume-Uni, "United Kingdom", Britain, "Grande-Bretagne"], region: europe}
-  - {code: IE, names: [Irlande, Ireland], region: europe}
-  - {code: ES, names: [Espagne, Spain], region: europe}
-  - {code: PT, names: [Portugal], region: europe}
-  - {code: IT, names: [Italie, Italy], region: europe}
-  - {code: CH, names: [Suisse, Switzerland], region: europe}
-  - {code: AT, names: [Autriche, Austria], region: europe}
-  - {code: CZ, names: [Tchéquie, "République tchèque", Czechia], region: europe}
-  - {code: SK, names: [Slovaquie, Slovakia], region: europe}
-  - {code: HU, names: [Hongrie, Hungary], region: europe}
-  - {code: RO, names: [Roumanie, Romania], region: europe}
-  - {code: MD, names: [Moldavie, Moldova], region: europe}
-  - {code: BG, names: [Bulgarie, Bulgaria], region: europe}
-  - {code: GR, names: [Grèce, Greece], region: europe}
-  - {code: RS, names: [Serbie, Serbia], region: europe}
-  - {code: XK, names: [Kosovo], region: europe}
-  - {code: TR, names: [Turquie, Turkey, Türkiye], region: moyen-orient}
-  - {code: GE, names: [Géorgie], region: caucase}   # "Georgia" volontairement absent (ambigu : État américain)
-  - {code: AM, names: [Arménie, Armenia], region: caucase}
-  - {code: AZ, names: [Azerbaïdjan, Azerbaijan], region: caucase}
-  - {code: IL, names: [Israël, Israel], demonyms: [israélien, israélienne, Israeli], region: moyen-orient}
-  - {code: PS, names: [Palestine, "Territoires palestiniens", Gaza, Cisjordanie, "West Bank"], region: moyen-orient}
-  - {code: LB, names: [Liban, Lebanon], region: moyen-orient}
-  - {code: SY, names: [Syrie, Syria], region: moyen-orient}
-  - {code: IQ, names: [Irak, Iraq], region: moyen-orient}
-  - {code: IR, names: [Iran], demonyms: [iranien, iranienne, Iranian], region: moyen-orient}
-  - {code: YE, names: [Yémen, Yemen], region: moyen-orient}
-  - {code: SA, names: ["Arabie saoudite", "Saudi Arabia"], region: moyen-orient}
-  - {code: JO, names: [Jordanie], region: moyen-orient}
-  - {code: EG, names: [Égypte, Egypte, Egypt], region: afrique}
-  - {code: LY, names: [Libye, Libya], region: afrique}
-  - {code: DZ, names: [Algérie, Algeria], region: afrique}
-  - {code: MA, names: [Maroc, Morocco], region: afrique}
-  - {code: TN, names: [Tunisie, Tunisia], region: afrique}
-  - {code: ML, names: [Mali], region: afrique}
-  - {code: BF, names: [Burkina Faso], region: afrique}
-  - {code: NE, names: [Niger], region: afrique}
-  - {code: SD, names: [Soudan, Sudan], region: afrique}
-  - {code: CN, names: [Chine, China], demonyms: [chinois, chinoise, Chinese], region: asie}
-  - {code: TW, names: [Taïwan, Taiwan], region: asie}
-  - {code: KP, names: ["Corée du Nord", "North Korea"], region: asie}
-  - {code: KR, names: ["Corée du Sud", "South Korea"], region: asie}
-  - {code: IN, names: [Inde, India], region: asie}
-  - {code: PK, names: [Pakistan], region: asie}
-  - {code: AF, names: [Afghanistan], region: asie}
-  - {code: US, names: [États-Unis, Etats-Unis, "United States", USA], demonyms: [américain, américaine, American], region: amerique}
+  - {code: FR, center: [2.3, 46.6], names: [France, "France métropolitaine", "territoire français", "territoire national", Hexagone], demonyms: [français, française, French], region: europe}
+  - {code: GP, center: [-61.55, 16.25], names: [Guadeloupe], parent: FR, region: outre-mer}
+  - {code: MQ, center: [-61.0, 14.65], names: [Martinique], parent: FR, region: outre-mer}
+  - {code: GF, center: [-53.0, 4.0], names: [Guyane, "Guyane française", "French Guiana"], parent: FR, region: outre-mer}
+  - {code: RE, center: [55.5, -21.1], names: [La Réunion, Réunion], parent: FR, region: outre-mer}
+  - {code: YT, center: [45.15, -12.8], names: [Mayotte], parent: FR, region: outre-mer}
+  - {code: PM, center: [-56.3, 46.9], names: [Saint-Pierre-et-Miquelon], parent: FR, region: outre-mer}
+  - {code: BL, center: [-62.85, 17.9], names: [Saint-Barthélemy], parent: FR, region: outre-mer}
+  - {code: MF, center: [-63.05, 18.07], names: [Saint-Martin], parent: FR, region: outre-mer}
+  - {code: NC, center: [165.6, -21.3], names: [Nouvelle-Calédonie, "New Caledonia"], parent: FR, region: outre-mer}
+  - {code: PF, center: [-149.4, -17.7], names: [Polynésie française, "French Polynesia"], parent: FR, region: outre-mer}
+  - {code: WF, center: [-176.2, -13.8], names: [Wallis-et-Futuna], parent: FR, region: outre-mer}
+  - {code: TF, center: [69.5, -49.3], names: [TAAF, "Terres australes et antarctiques françaises"], parent: FR, region: outre-mer}
+  - {code: UA, center: [31.2, 48.4], names: [Ukraine], demonyms: [ukrainien, ukrainienne, ukrainiens, ukrainiennes, Ukrainian], region: europe}
+  - {code: RU, center: [95, 61], names: [Russie, Russia, "Fédération de Russie"], demonyms: [russe, russes, Russian], region: europe}
+  - {code: BY, center: [28, 53.7], names: [Biélorussie, Bélarus, Belarus], demonyms: [biélorusse, biélorusses, Belarusian], region: europe}
+  - {code: PL, center: [19.4, 52.1], names: [Pologne, Poland], demonyms: [polonais, polonaise, Polish], region: europe}
+  - {code: LT, center: [23.9, 55.3], names: [Lituanie, Lithuania], region: europe}
+  - {code: LV, center: [24.9, 56.9], names: [Lettonie, Latvia], region: europe}
+  - {code: EE, center: [25.5, 58.7], names: [Estonie, Estonia], region: europe}
+  - {code: FI, center: [26, 64.5], names: [Finlande, Finland], region: europe}
+  - {code: SE, center: [15.5, 62.5], names: [Suède, Sweden], region: europe}
+  - {code: NO, center: [9.5, 61], names: [Norvège, Norway], region: europe}
+  - {code: DK, center: [10, 56], names: [Danemark, Denmark], region: europe}
+  - {code: DE, center: [10.4, 51.1], names: [Allemagne, Germany], demonyms: [allemand, allemande, German], region: europe}
+  - {code: BE, center: [4.6, 50.6], names: [Belgique, Belgium], region: europe}
+  - {code: NL, center: [5.3, 52.2], names: [Pays-Bas, Netherlands], region: europe}
+  - {code: GB, center: [-2.5, 54], names: [Royaume-Uni, "United Kingdom", Britain, "Grande-Bretagne"], region: europe}
+  - {code: IE, center: [-8, 53.2], names: [Irlande, Ireland], region: europe}
+  - {code: ES, center: [-3.7, 40.2], names: [Espagne, Spain], region: europe}
+  - {code: PT, center: [-8, 39.6], names: [Portugal], region: europe}
+  - {code: IT, center: [12.6, 42.8], names: [Italie, Italy], region: europe}
+  - {code: CH, center: [8.2, 46.8], names: [Suisse, Switzerland], region: europe}
+  - {code: AT, center: [14.5, 47.6], names: [Autriche, Austria], region: europe}
+  - {code: CZ, center: [15.5, 49.8], names: [Tchéquie, "République tchèque", Czechia], region: europe}
+  - {code: SK, center: [19.5, 48.7], names: [Slovaquie, Slovakia], region: europe}
+  - {code: HU, center: [19.4, 47.2], names: [Hongrie, Hungary], region: europe}
+  - {code: RO, center: [25, 45.9], names: [Roumanie, Romania], region: europe}
+  - {code: MD, center: [28.5, 47.2], names: [Moldavie, Moldova], region: europe}
+  - {code: BG, center: [25.2, 42.7], names: [Bulgarie, Bulgaria], region: europe}
+  - {code: GR, center: [22, 39], names: [Grèce, Greece], region: europe}
+  - {code: RS, center: [20.8, 44], names: [Serbie, Serbia], region: europe}
+  - {code: XK, center: [20.9, 42.6], names: [Kosovo], region: europe}
+  - {code: TR, center: [35, 39], names: [Turquie, Turkey, Türkiye], region: moyen-orient}
+  - {code: GE, center: [43.4, 42.2], names: [Géorgie], region: caucase}   # "Georgia" volontairement absent (ambigu : État américain)
+  - {code: AM, center: [44.9, 40.3], names: [Arménie, Armenia], region: caucase}
+  - {code: AZ, center: [47.7, 40.3], names: [Azerbaïdjan, Azerbaijan], region: caucase}
+  - {code: IL, center: [35, 31.4], names: [Israël, Israel], demonyms: [israélien, israélienne, Israeli], region: moyen-orient}
+  - {code: PS, center: [35.2, 31.9], names: [Palestine, "Territoires palestiniens", Gaza, Cisjordanie, "West Bank"], region: moyen-orient}
+  - {code: LB, center: [35.9, 33.9], names: [Liban, Lebanon], region: moyen-orient}
+  - {code: SY, center: [38.5, 35], names: [Syrie, Syria], region: moyen-orient}
+  - {code: IQ, center: [43.7, 33], names: [Irak, Iraq], region: moyen-orient}
+  - {code: IR, center: [53.7, 32.4], names: [Iran], demonyms: [iranien, iranienne, Iranian], region: moyen-orient}
+  - {code: YE, center: [47.6, 15.9], names: [Yémen, Yemen], region: moyen-orient}
+  - {code: SA, center: [45, 24], names: ["Arabie saoudite", "Saudi Arabia"], region: moyen-orient}
+  - {code: JO, center: [36.5, 31.2], names: [Jordanie], region: moyen-orient}
+  - {code: EG, center: [30, 26.8], names: [Égypte, Egypte, Egypt], region: afrique}
+  - {code: LY, center: [17.2, 27], names: [Libye, Libya], region: afrique}
+  - {code: DZ, center: [2.6, 28], names: [Algérie, Algeria], region: afrique}
+  - {code: MA, center: [-6.3, 31.8], names: [Maroc, Morocco], region: afrique}
+  - {code: TN, center: [9.5, 34], names: [Tunisie, Tunisia], region: afrique}
+  - {code: ML, center: [-3.5, 17.4], names: [Mali], region: afrique}
+  - {code: BF, center: [-1.7, 12.2], names: [Burkina Faso], region: afrique}
+  - {code: NE, center: [9.4, 17.6], names: [Niger], region: afrique}
+  - {code: SD, center: [30, 15.6], names: [Soudan, Sudan], region: afrique}
+  - {code: CN, center: [103.8, 36], names: [Chine, China], demonyms: [chinois, chinoise, Chinese], region: asie}
+  - {code: TW, center: [121, 23.7], names: [Taïwan, Taiwan], region: asie}
+  - {code: KP, center: [127, 40], names: ["Corée du Nord", "North Korea"], region: asie}
+  - {code: KR, center: [127.8, 36.4], names: ["Corée du Sud", "South Korea"], region: asie}
+  - {code: IN, center: [79, 22], names: [Inde, India], region: asie}
+  - {code: PK, center: [69.3, 30], names: [Pakistan], region: asie}
+  - {code: AF, center: [66, 33.9], names: [Afghanistan], region: asie}
+  - {code: US, center: [-98, 39.5], names: [États-Unis, Etats-Unis, "United States", USA], demonyms: [américain, américaine, American], region: amerique}
   # Pays fictifs utilisés UNIQUEMENT par les fixtures de test (aucun lien avec une situation réelle)
   - {code: ZZ, names: [Exampleland, Exemple-A, Exemple-B, Testistan, Fictivia], demonyms: [fictivien], region: test}
