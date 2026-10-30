@@ -178,8 +178,13 @@ def serve(factory: sessionmaker[Session], settings: Settings, *, tick_s: float =
                 last_purge = time.monotonic()
                 try:
                     purge_all(factory, settings)
+                    from app.retention import purge_history
+                    with session_scope(factory) as s:
+                        done = purge_history(s, utcnow(), months=int(os.environ.get("HISTORY_RETENTION_MONTHS", "12")))
+                    if done["documents"]:
+                        log.info("purge de l'historique : %s", done)
                 except Exception:
-                    log.exception("échec de la purge des snapshots")
+                    log.exception("échec de la purge")
             time.sleep(tick_s)
     finally:
         lock_conn.close()

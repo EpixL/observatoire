@@ -1,143 +1,95 @@
-# ETAT — session A (backend), lots 0, 1 et 2
+# ETAT — session A (backend), lots 0 à 3 (lot 3 partiel)
 
-> **Mise à jour du 29/10/2026 (soir) — corrections après le smoke RÉEL sur le Pi.** Les sections 3 et 4 ci-dessous remplacent l'état « tout bloqué » du matin.
-> Je me suis arrêté après ces corrections ; pas de lot 3 avant ton feu vert.
-
-*Branche `backend` · 29 octobre 2026 · rien n'est fusionné dans `main` · je m'arrête ici et j'attends ta validation.*
+*Branche `backend` · mise à jour du 30 octobre 2026 · rien n'est fusionné dans `main` · je m'arrête ici et j'attends ta validation avant d'aller plus loin.*
 
 ## En une phrase
 
-Le code qui **collecte** (6 sources actives, 4 désactivées) et qui **transforme les documents en événements traçables** est écrit et testé
-(85 tests verts). Un premier **smoke réel sur le Pi** a eu lieu et a révélé 6 défauts, corrigés (section 3) : dont un **faux succès** (page anti-robot prise pour un document).
-Reste à **relancer le smoke** avec le code corrigé, puis à tenir les 72 h : les critères de sortie des lots 0 et 1 ne sont pas encore atteints.
+La collecte (6 sources actives), les événements traçables et — nouveau — la **jauge 0-100 par paliers avec couverture, trois dossiers, seuils versionnés et API** sont écrits et testés
+(130 tests verts). Le lot 3 est **partiel** : le moteur d'hypothèses et la conclusion à gabarits ne sont pas faits, donc son critère de sortie n'est pas atteint.
+Sur le terrain, **la jauge sera « non calculable » pendant 8 semaines** (référence quantitative insuffisante) : c'est voulu.
 
-## 1. Ce qui est fait
+## 1. Ce qui est fait depuis la dernière fois
 
-### Lot 0 — cadrage
-- `docs/cadrage.md` : réponses à la section 16 avec ce qu'on sait, et 8 questions pour toi (en bas de ce fichier aussi).
-- `docs/source-register.md` : registre des sources, avec le statut de vérification de **chaque** endpoint.
-- `docs/runbook.md` : installation sur le Pi, surveillance, sauvegarde, dépannage.
+### Corrections demandées après le 2e smoke réel
+- **Second smoke du Pi (17:58 UTC) : propre** — page des conseils OK, EASA 22 CZIB, IODA OK, CERT-FR 40 + 40, France 24 : 24 ; Vigipirate BLOCKED (Gcore détecté, non contourné) ; RSS France Diplomatie 403 ; OTAN/SEAE ignorées.
+- `sample_title` du rapport de smoke = article le **plus récent** (CERT-FR mélange 2014 et 2026) ; testé.
+- Statuts du registre mis à jour (`verified` : page conseils, EASA, CERT-FR ×2, France 24 ; `partially_verified` : IODA, car la forme d'un événement n'a jamais été vue).
 
-### Lot 1 — collecte
-- 4 types de connecteurs (flux RSS/Atom, page web, tableau EASA, API JSON) → **10 sources déclarées, 6 actives** (page France Diplomatie,
-  EASA, IODA, CERT-FR ×2, France 24) ; désactivées : RSS France Diplomatie (403) et Vigipirate (page anti-robot) avec leur motif, OTAN et UE/SEAE (URL inconnue).
-- Chaque document est conservé **version par version** (jamais écrasé : la base l'interdit). Chaque version porte son empreinte,
-  son texte normalisé, un snapshot brut compressé, et toutes les dates du plan §4 en UTC (`first_seen_at` ne peut jamais changer, garanti par la base).
-- Une date future, sans fuseau, illisible ou absente est **marquée**, jamais corrigée en silence.
-- Un changement de **menu, bandeau cookies, mise en page ou simple date « mis à jour le… »** ne compte pas comme un changement de fond ;
-  un mot retiré (« Formellement déconseillé » → « Déconseillé ») ou une date de validité modifiée **compte**.
-- Santé de chaque connecteur (`connector_health` + journal `fetch_runs`) : `ok`, `degraded` (1 échec), `failing` (≥ 2 échecs),
-  `rate_limited` (quota), `blocked`. Politesse : requêtes conditionnelles (ETag/Last-Modified), pause aléatoire ±20 %, attente croissante
-  en cas d'erreur (plafond 1 h, 6 h minimum après un 403/404), `Retry-After` respecté, `robots.txt` respecté pour les pages web,
-  redirection vers un domaine non autorisé refusée.
-- PostgreSQL + migrations (Alembic, aller-retour testé) ; Docker/compose ; CLI ; petite API de santé en lecture seule.
+### Décisions de David (29/10) appliquées
+Détail et emplacement de chacune : `docs/cadrage.md` (tableau « Décisions »). En bref : 16 Go de RAM, données sur `/mnt/homelab` (disque dur mécanique, `chattr +C` conservé) ; **port 8100** ; **zone secondaire = flanc est**
+(UA, RU, BY, PL, LT, LV, EE, MD : gazetier, territoire de jauge, 9 entités IODA) ; notifications officielles + A3 (rien d'implémenté, lot 7) ; couverture = les 3 familles du plan ;
+**purge à 12 mois implémentée** (`purge-history`, quotidienne, `--dry-run`, protège ce que fondent les décisions humaines) ; **`scripts/backup-db.sh`** (pg_dump, 7 jours, vérification, **pas de cron**) ;
+`COLLECTOR_CONTACT=smoke-test` par défaut, aucune adresse e-mail dans le dépôt.
 
-### Lot 2 — événements
-- Schémas validés : une affirmation est soit une **observation** (mesure d'un capteur, uniquement IODA), soit une **déclaration**
-  (de l'article, du ministère, de la personne citée). Le texte libre ne produit jamais mieux qu'une déclaration *provisoire* « à vérifier ».
-- Extraction **sans IA** : champs à vocabulaire fixe (niveaux de conseil, bulletins EASA, posture Vigipirate, identifiants CERT-FR, IODA)
-  + lecture prudente de la prose FR/EN (négations, conditionnel, exercices, menaces, attributions).
-- Déduplication des documents : URL, empreinte, quasi-doublon, agence citée. On compte des **origines**, pas des articles.
-- Rapprochement des événements par type / zone / période / acteurs ; démentis rattachés au même dossier ; republications d'anciens articles écartées ;
-  « causes communes » (tempête → panne → aéroport fermé) **proposées**, jamais affirmées ; confirmation officielle **par affirmation**.
-- Provenance : citation exacte + position dans la version précise. `verify-provenance` contrôle que rien n'est inventé.
-- Corpus de cas piégeux du plan §13 : voir tableau dans `docs/lot2-evenements.md`.
+### Sources (points A et B de la demande)
+- **Conditions d'utilisation** : recherche faite, mais **le cloud ne résout aucun domaine source** (WebFetch : ENOTFOUND pour tous) → je n'ai lu **aucune** page à la source, seulement des extraits de recherche, marqués comme tels (`docs/source-register.md`, section dédiée, un tableau avec liens et cadence). Cadences ralenties à **30 min** pour toutes les sources dont le cadre est douteux (France Diplomatie, EASA, IODA, France 24) ; CERT-FR reste à 15 min (licence ouverte annoncée).
+  Deux points à retenir : IODA est sous copyright Georgia Tech (usage non académique → licence à demander ; usage privé seulement) ; EASA passe certains bulletins en accès restreint (la liste publique peut être **incomplète**).
+- **Vigipirate** : aucune source officielle accessible trouvée. Ajout d'une candidate **`vigipirate-gouv`** (page gouvernement.fr, URL supposée, désactivée) à tester sur le Pi ; sinon suivi des annonces (info.gouv.fr) ou saisie humaine — jamais de contournement.
+- **RSS France Diplomatie** : aucun flux RSS des conseils trouvé (canaux officiels : application et compte X). Reste désactivé ; la page des conseils est la voie principale.
+- **OTAN / SEAE** : OTAN = page officielle « RSS » comme point de départ de `discover-feeds` ; SEAE = aucun RSS, liste de pages paginée. Les deux restent **désactivés** (`to_discover`).
 
-## 2. Choix pris, expliqués simplement
+### Lot 3 (partiel) — `docs/lot3-jauge.md`
+- **Jauge** : 8 paliers, règles scriptées, jamais de somme ; rhétorique plafonnée à 10 ; 70/85/100 **uniquement par revue humaine** validée (faits, zone, période, acteur documentés séparément) ; une attaque hors du territoire ne compte pas pour lui.
+- **Couverture** : 3 familles + référence de 8 semaines ; sinon « non calculable » (jamais 0) ; exception : fait grave humain (≥ 70) publié avec badge « couverture partielle ».
+- **Baisse/hausse** : hausse immédiate ; baisse après N réévaluations stables ; correction factuelle immédiate ; 85/100 ne baissent pas avec le temps.
+- **Seuils versionnés** (`seuils-v1` = plan) : insert-only, chaque changement daté/acteur/motif, retour au plan = un changement de plus, **chaque calcul enregistre la version utilisée**, tendance `non_comparable` après changement.
+- **API** (`docs/api-contract-backend-proposal.md`) : seuils (lecture, `PUT`, historique, versions, réinitialisation), état des sources, jauge/détail/historique, dossiers, événements, file de revue, revue humaine. Écritures protégées par `ADMIN_TOKEN` (**désactivées si vide**). Proposition écrite dans le fichier dédié, **sans toucher à `docs/api-contract.md`** (propriété de B).
 
-| Choix | Pourquoi |
-|---|---|
-| **Un premier relevé n'est pas un changement** | Au démarrage on ne connaît pas l'historique. Annoncer « le niveau de conseil a changé » alors qu'on le voit pour la première fois serait inventer une alerte. On enregistre une *base*, et on détecte les changements ensuite. |
-| **Les mots-clés ne prouvent rien** | « attaque » dans un article = quelqu'un parle d'attaque. Le système le note comme *déclaration à vérifier*, et crée une file de revue. C'est lent mais honnête (plan §6.7). |
-| **En cas de doute, on sous-compte l'indépendance** | Prendre deux reprises de la même dépêche pour deux sources distinctes est l'erreur dangereuse. Se tromper dans l'autre sens fait seulement perdre une corroboration. |
-| **Un flux invalide n'est jamais « aucune nouveauté »** | Une page HTML de maintenance, un JSON au format inattendu, un quota dépassé donnent une **erreur visible**, pas une liste vide. (Un test a d'ailleurs trouvé ce défaut chez moi, corrigé.) |
-| **Aucun port dans le code** | Tout passe par `.env` ; la base n'expose rien ; seul l'API sort sur l'adresse LAN choisie. |
-| **Cadences prudentes (5–15 min)** | Je n'ai pas pu lire les conditions d'utilisation. On resserrera après vérification et mesure. |
-| **PostgreSQL 16, Python 3.13, versions verrouillées** | Images arm64 vérifiées avec leur empreinte (digest). 29 paquets Python épinglés, wheels `aarch64` vérifiées. |
-| **Mots de passe/clés : uniquement dans `.env`** | Fichier ignoré par Git. `.env.example` ne contient que du factice. Les messages d'erreur masquent `key=`, `token=`, `password=`. |
+## 2. Lot 3 : ce qui n'est PAS fait
+Moteur d'hypothèses H0-H4 et conclusion à gabarits (donc `hypotheses: []`, dit explicitement) · voie rapide « décisions officielles » · détection MAD (les seuils `anomaly_mad_k`/`anomaly_windows` existent mais ne servent à rien tant qu'aucune série numérique n'est collectée) ·
+badge nucléaire et alerte civile · `/overview`, `/journal`, SSE `/stream`, `/settings/*`, `/ai/*` · exclusions `doublon`/`hors_perimetre`/`preuve_insuffisante`.
 
-## 3. Endpoints : résultat du smoke réel sur le Pi (29/10/2026, 17:08 UTC) et corrections
-
-Le smoke du cloud (matin) était entièrement bloqué par le proxy. Le smoke **réel** sur le Pi donne :
-
-| Source | Constat réel | Correction faite | Statut maintenant |
-|---|---|---|---|
-| france-diplomatie-cv | échec : l'URL avec « / » final redirige vers `http://` (port 80 fermé), erreur opaque | URL **sans** « / » ; toute redirection https→http devient une erreur claire « redirection non sécurisée » ; marqueur de contenu attendu | à **relancer** |
-| france-diplomatie-rss | 403 avec notre UA honnête | **désactivée**, motif écrit, aucun contournement | `blocked_by_site` |
-| easa-czib | 200, mais compté « 1 item » alors que le tableau contient un bulletin par ligne | nouveau connecteur : **un document par CZIB** (numéro, révision, zone, émission, révision, validité, statut, lien ; dates JJ/MM/AAAA). Nouvelle révision = changement de fond ; prolongation de `until` seule = « prolongation de validité » ; liste vide = « format inattendu » | `partially_verified` |
-| ioda-fr | 200, `data: []` (France) | fixture réelle ajoutée ; copyright Georgia Tech noté dans le registre | `partially_verified` (forme d'un événement toujours non vue) |
-| cert-fr-alertes / actualite | 200, 40 entrées ; ordre **non chronologique** ; « [MàJ] » datés de l'origine | « [MàJ] » = nouvelle version du même avis, date d'origine conservée mais **marquée**, jamais prise pour une republication ; arriéré du 1er relevé écarté ; plus aucune hypothèse sur l'ordre | `verified` |
-| sgdsn-vigipirate | **faux succès** : la page « 200 » était un défi anti-robot Gcore | détection générique des pages de défi (Gcore, Cloudflare, mur JavaScript/cookies) → `blocked`, **jamais stockée**, jamais comptée comme succès, attente ≥ 6 h ; source **désactivée** avec son motif | `blocked_by_site` |
-| france24-fr | 200, 24 entrées | — | `verified` |
-| nato-news / eeas-presse | non testées | — | `to_discover`, désactivées |
-
-**Aucun contournement** n'a été ajouté (ni User-Agent de navigateur, ni JavaScript, ni cookies), conformément à la consigne : pour Vigipirate et le RSS de France Diplomatie,
-il faut trouver une **autre source officielle** (flux documenté dans la FAQ voyage ; data.gouv.fr ou page non protégée pour Vigipirate). Je n'ai pas pu la chercher (pas d'accès réseau aux sites).
-Sans Vigipirate, la famille « autorités/mesures » côté France repose pour l'instant sur CERT-FR, EASA et la page des conseils aux voyageurs.
-
-Nouveau contrôle positif par source (`expected_marker`) : une page 200 qui ne contient pas ce qu'on attend est une erreur « format inattendu », pas un succès.
-
-Toujours pas fait : construire les images Docker (pas de démon dans le cloud), mesurer la charge, tenir 72 h.
-
-## 4. À relancer sur le Pi (commandes exactes)
+## 3. À relancer / tester sur le Pi (commandes exactes)
 
 ```bash
 cd ~/observatoire && git pull origin backend
-# DATA_DIR vient de .env ; ici le disque Btrfs /mnt/homelab, jamais le disque système
-sed -i 's#^DATA_DIR=.*#DATA_DIR=/mnt/homelab/veille#' .env      # (ou éditer à la main)
+# .env : DATA_DIR=/mnt/homelab/veille, API_HOST_PORT=8100, COLLECTOR_CONTACT=smoke-test, ADMIN_TOKEN=$(openssl rand -hex 24)   (jeton seulement dans .env)
 set -a; . ./.env; set +a
-sudo mkdir -p "$DATA_DIR"/{postgres,snapshots} && sudo chattr +C "$DATA_DIR/postgres" \
-  && sudo chown 70:70 "$DATA_DIR/postgres" && sudo chown 10001:10001 "$DATA_DIR/snapshots"
+sudo mkdir -p "$DATA_DIR"/{postgres,snapshots} && sudo chattr +C "$DATA_DIR/postgres" && sudo chown 70:70 "$DATA_DIR/postgres" && sudo chown 10001:10001 "$DATA_DIR/snapshots"
 
-SMOKE_LOCAL=1 ./scripts/smoke-collectors.sh --all     # 1) relancer le smoke avec le code corrigé
+# 1) smoke des NOUVEAUTÉS : IODA avec 9 entités, candidate Vigipirate, découverte du flux OTAN
+SMOKE_LOCAL=1 ./scripts/smoke-collectors.sh --all
+SMOKE_LOCAL=1 ./scripts/smoke-collectors.sh --source vigipirate-gouv --all      # doit être OK sans défi anti-robot ET contenir « vigipirate »
+cd backend && CONFIG_DIR=../config python -m app.cli discover-feeds nato-news    # liste les flux de la page RSS officielle de l'OTAN ; me renvoyer la sortie
+
+# 2) démarrage, puis la jauge (attendue « non_calculable » pendant 8 semaines)
+cd .. && docker compose --env-file .env up -d --build
+docker compose exec worker python -m app.cli evaluate-gauge
+curl -s "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/gauge/detail?territory=FR" | python3 -m json.tool | head -60
+curl -s "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/sources/status" | python3 -m json.tool | head -40
+
+# 3) test des seuils (écriture protégée) puis retour au plan
+curl -s -X PUT "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/thresholds" -H "Authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' \
+  -d '{"changes":[{"key":"downgrade_evals","to":1}],"reason":"essai de réactivité","confirmed":true,"expected_policy_version":"seuils-v1"}'
+curl -s -X POST "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/thresholds/reset" -H "Authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' \
+  -d '{"reason":"retour aux valeurs du plan","confirmed":true,"expected_policy_version":"seuils-v2"}'
+
+# 4) sauvegarde manuelle (pas de cron) puis essai à blanc de la purge
+./scripts/backup-db.sh && docker compose exec worker python -m app.cli purge-history --dry-run
 ```
-Résultats attendus : `france-diplomatie-cv` OK (sinon me renvoyer l'erreur) ; `easa-czib` OK avec **plusieurs items** (un par CZIB) ;
-`sgdsn-vigipirate` et `france-diplomatie-rss` BLOCKED (désactivées, c'est normal avec `--all`) ; `ioda-fr` OK (0 item si rien en France) ;
-CERT-FR et France 24 OK. Renvoyer `smoke-out/smoke-report.json` ; pour EASA, joindre aussi `smoke-out/raw/easa-czib.html` (page entière) afin que je valide la pagination et la disposition des cellules.
+Ce que je ne peux pas vérifier d'ici : l'IODA avec 9 entités (volume réel, forme d'un événement), la candidate Vigipirate, le comportement du disque dur, la charge, les 72 h.
 
-Puis, si le smoke est bon : démarrage, surveillance 72 h, test de reprise (procédure : `docs/runbook.md`, §3 et §4).
+## 4. Points de vigilance (mon regard de mentor)
 
-## 5. Points de vigilance (mon regard de mentor)
+1. **Tu as décidé « 0 » = 3 familles + 8 semaines, et c'est cohérent avec le plan, mais mesure ce que cela implique** : pendant deux mois l'écran principal affichera un cadran grisé. Garde ça en tête avant de juger l'outil ; si c'est trop frustrant, `baseline_weeks` descend à 4, **en le notant** (versionné) — mais ne le fais pas pour « voir un chiffre ».
+2. **Aucune revue humaine ne s'est encore faite, et sans elle les paliers 70+ n'existent pas.** C'est le bon réglage (la prose n'est jamais une preuve), mais il déplace le travail vers toi : décide qui qualifie, et à quel rythme, avant le pilote.
+3. **Les règles de classification des événements (`engine._classify`) sont ma proposition**, jamais confrontée à de vraies données. Relis-les (`docs/lot3-jauge.md`) et dis-moi ce qui te choque ; c'est le cœur de ce que « tension documentée » veut dire.
+4. **Dépendance à des sources fragiles** : l'état de la famille « autorités » repose sur EASA (liste publique possiblement incomplète) et une page web ; Vigipirate manque. Ne conclus rien de rassurant d'un « 0 » tant que cela n'est pas réglé.
+5. **Je n'ai pas lu les conditions d'utilisation à la source** (cloud bloqué). Mon tableau est une base de travail, pas un avis juridique ; IODA en particulier : usage privé uniquement.
+6. **Les tests prouvent la logique sur des cas que j'ai imaginés** (130 verts) ; le terrain dira le reste. La période silencieuse est incontournable.
+7. **Le jeton `ADMIN_TOKEN` est une protection minimale** (un secret partagé, sans comptes). Suffisant sur un LAN domestique ; à renforcer (VPN, vrai compte) avant tout accès extérieur.
 
-1. **Le risque n°1 est la distance entre mes extracteurs et les vraies pages.** Le smoke réel l'a confirmé (faux succès Gcore, EASA mal découpée, URL en redirection). Les parseurs restants (France Diplomatie, événements IODA)
-   ont été écrits d'après la forme *attendue*. Prévois que le premier passage réel demande des ajustements : c'est normal, pas un échec.
-   Ne déclare pas le lot 1 « fini » avant que le smoke soit au vert et que 72 h se soient écoulées.
-2. **Ne confonds pas « beaucoup de tests verts » et « ça marche sur le terrain ».** 85 tests prouvent la logique sur des cas fictifs que j'ai moi-même imaginés ;
-   ils ne prouvent pas que les sites réels se comportent ainsi. Le vrai test est la période silencieuse sur le Pi (plan §13).
-3. **Tant que les 3 sources structurées ne sont pas validées, le système repose surtout sur de la prose** (France 24), qui est son point faible assumé.
-   Regarde la file `reviews` au bout de quelques jours : elle te dira honnêtement ce que le moteur ne comprend pas.
-4. **Support de stockage** : si le Pi écrit sur carte SD, PostgreSQL risque de l'user vite. SSD fortement conseillé (cf. cadrage).
-5. **Le gazetier (80 territoires) est ma proposition**, pas une décision de ta part : zones secondaires = question 3.
-6. **Ne fais pas confiance aux seuils de recouvrement (0,8 / 0,4)** : ce sont des réglages de départ, jamais calibrés sur de vrais textes.
-7. **L'API n'a pas d'authentification** (lecture seule, LAN). À traiter avant tout accès hors du LAN, et au plus tard au lot 4.
+## 5. Alignement avec la session B
+J'ai lu `docs/api-contract.md` (branche `dashboard`) et repris ses clés de seuils, son format `PUT /thresholds`, ses codes d'erreur et sa table de correspondance des états de sources.
+Écarts et ajouts à intégrer côté B : `docs/api-contract-backend-proposal.md` (dont `fictional:false`, centres de zones « pays » seulement, `hypotheses:[]` tant que le moteur n'existe pas).
 
-## 6. Alignement avec la session B (dashboard)
+## 6. Questions ouvertes
+1. Qui fait la revue humaine des événements hostiles, et à quel rythme ?
+2. Vigipirate : on teste `vigipirate-gouv`, on suit les annonces officielles, ou on saisit le niveau à la main ?
+3. Veux-tu que je continue le lot 3 (moteur d'hypothèses + conclusion à gabarits + voie officielle) avant le lot 4, ou que B intègre d'abord ce qui existe ?
+4. IODA : on écrit à Georgia Tech pour clarifier l'usage, ou on reste en usage strictement personnel ?
+5. Veux-tu garder `baseline_weeks = 8` au démarrage ?
 
-J'ai lu `frontend/src/types.ts` (branche `dashboard`, lecture seule ; `docs/api-contract.md` n'existe pas encore). Écarts à régler au lot 3/4 :
-- `occurred_precision` : B = `minute|heure|jour|inconnue` ; moi = `instant|day|month|year|unknown`.
-- `reading_status` (`retenu|contexte|a_verifier`) et `exclusion` (`doublon|hors_perimetre|perime|preuve_insuffisante`) : produits au lot 3 ; aujourd'hui j'ai `events.status` (`active|to_verify|historical`) et `exclusion_reason` (`republication`). `doublon` se déduit des groupes d'origine ; `hors_perimetre` dépendra du territoire évalué (lot 3).
-- `origin_id` / `is_original` / `independent_origins` ↔ `origin_groups` / `events.origin_count` : correspondance directe.
-- `effect` (critère rempli/non rempli), `rule`, `hypotheses`, `Conclusion`, `GaugeState` : lot 3 (aucun calcul de palier n'existe).
-- Mon API actuelle (`/api/v1/connectors/health`, `/api/v1/documents`) est provisoire ; je suivrai le contrat de B pour le lot 3.
-
-## 7. Pas fait volontairement
-
-Interprétation, hypothèses, jauge (lot 3) · IA · Telegram/notifications · authentification · sauvegardes automatiques ·
-suppression des données au-delà de 12 mois · satellite/aviation/maritime · zones secondaires.
-
-## 8. Questions ouvertes (détail dans `docs/cadrage.md`)
-
-1. RAM du Pi ? Données sur SSD/NVMe (pas SD) ? Espace libre ?
-2. Quel port libre pour l'API ?
-3. Quelles zones secondaires suivre (3 à 5) ?
-4. Niveau de notifications : officiel seul / +A3 / +A2/A3 ?
-5. Rétention 12 mois et sauvegardes automatiques : où les stocker ?
-6. Profil de couverture du plan (3 familles) : on le teste tel quel au lot 3 ?
-7. Contact à mettre dans le User-Agent (visible des sites) ?
-8. Conditions d'utilisation des sources : tu les consultes, ou je cherche une fois le Pi connecté ?
-
-## 9. Contrôles effectués
-
-`pytest` : **85 tests verts** (dont les cas issus du smoke réel : page Gcore, ligne EASA, enveloppe IODA, flux CERT-FR en désordre) (PostgreSQL réel + faux serveur HTTP) · migrations 0001/0002 : montée, descente, remontée OK · worker : un seul actif (verrou), arrêt propre sur SIGTERM,
-attente croissante après échecs vérifiée par test automatique · `docker compose config` valide · images `python:3.13-slim-bookworm` et `postgres:16-alpine` présentes en arm64 (digests dans les fichiers) ·
-installation des dépendances dans un environnement vierge puis CLI et API démarrés · aucune chaîne ressemblant à un secret dans les fichiers versionnés.
+## 7. Contrôles effectués
+`pytest` : **130 tests verts** (PostgreSQL réel, faux serveur HTTP, API en `TestClient`) · migrations 0001→0003 : montée, descente, remontée OK · `docker compose config` valide (api: `ADMIN_TOKEN` optionnel) · scripts `bash -n` OK ·
+aucun secret dans les fichiers versionnés (`.env.example` : `ADMIN_TOKEN=` vide) · recherche web des conditions d'utilisation faite mais **sans accès aux pages sources** · images Docker non construites (pas de démon dans le cloud).

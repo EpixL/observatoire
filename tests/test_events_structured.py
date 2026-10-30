@@ -190,3 +190,38 @@ def test_cert_maj_apres_le_premier_releve_est_une_nouvelle_version_datee_de_main
     assert len(upd) == 1 and not upd[0].stale
     ev = next(e for e in events(sources) if e.id and e.status != "historical" and e.ref_at == clock.now)
     assert ev.ref_at.year == 2026             # datée de la mise à jour observée, pas de 2024
+
+
+def test_purge_history_removes_old_documents_but_keeps_what_human_decisions_rest_on(sources):
+    """Rétention 12 mois : purge des anciens documents, jamais de ce sur quoi s'appuie une décision humaine."""
+    from datetime import timedelta
+    from sqlalchemy import text
+    from app.retention import purge_history
+    from corpus_helpers import T0, add_source, put
+    from gauge_helpers import FULL, annotate_event
+    old = T0 - timedelta(days=400)
+    for sid in ("m-old", "m-kept", "m-new"):
+        add_source(sources, sid)
+    put(sources, "m-old", "1", "Aéroport fermé à Mayotte", "L'aéroport de Mayotte est fermé.", published="Wed, 01 Jan 2025 10:00:00 GMT", at=old)
+    put(sources, "m-kept", "1", "Attaque à Mayotte", "Une attaque de drones a visé un entrepôt à Mayotte, selon des témoins.", published="Wed, 01 Jan 2025 10:00:00 GMT", at=old)
+    put(sources, "m-new", "1", "Aéroport fermé à Mayotte", "L'aéroport de Mayotte est fermé jusqu'à nouvel ordre.", published="Wed, 28 Oct 2026 10:00:00 GMT", at=T0)
+    process(sources, T0)
+    # une décision humaine s'appuie sur l'événement hostile (daté de il y a 400 jours)
+    with session_scope(sources) as s:
+        hostile_ev = s.execute(text("select id from events where event_type = 'hostile_act_alleged'")).scalar()
+    if hostile_ev:
+        annotate_event(sources, hostile_ev, "not_hostile", {}, note="vérifié : aucune attaque", at=T0)
+    with session_scope(sources) as s:
+        dry = purge_history(s, T0, months=12, dry_run=True)
+    assert dry["dry_run"] and dry["documents"] >= 1
+    with session_scope(sources) as s:
+        assert s.execute(text("select count(*) from documents")).scalar() == 3          # le dry-run n'efface rien
+        out = purge_history(s, T0, months=12)
+    with session_scope(sources) as s:
+        left = {r[0] for r in s.execute(text("select source_id from documents"))}
+        assert "m-new" in left and "m-old" not in left                                 # ancien non protégé : purgé
+        assert ("m-kept" in left) == bool(hostile_ev)                                  # annoté : conservé avec ses preuves
+        assert s.execute(text("select count(*) from evidence_links e left join document_versions v on v.id = e.document_version_id where v.id is null")).scalar() == 0
+        assert s.execute(text("select count(*) from manual_annotations")).scalar() == (1 if hostile_ev else 0)
+        from app.events.provenance import verify_all
+        assert verify_all(s)["bad"] == 0

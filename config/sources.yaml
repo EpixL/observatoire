@@ -35,8 +35,9 @@ sources:
     poll_interval_s: 1800     # conditions non confirmées (site refait en 2026, un RSS déjà refusé en 403) : on ralentit
     licence: "Non confirmée (page mentions légales inaccessible depuis le cloud) : usage privé, pas de redistribution."
     quota_note: "Aucun quota publié. Respecter robots.txt. Canaux officiels documentés : application « Conseils aux voyageurs », compte X @ConseilsVoyages ; aucun flux RSS des conseils trouvé."
-    verification_status: unverified_blocked
+    verification_status: verified      # 2e smoke réel (Pi, 29/10/2026 17:58 UTC) : OK
     options:
+      verified_on: "2026-10-29"
       content_selector: "main"
       expected_marker: "conseils aux voyageurs"   # contrôle positif : sinon « format inattendu »
 
@@ -79,7 +80,7 @@ sources:
     poll_interval_s: 1800
     licence: "Non confirmée. La page porte un avertissement « à titre d'information générale » ; conditions de réutilisation non trouvées."
     quota_note: "Aucun RSS trouvé en recherche (EASA propose un compte + suivi de la catégorie « Conflict zone »). Certains bulletins sont passés en « Information Notes » à accès restreint : la liste publique peut être INCOMPLÈTE. Pagination non vérifiée."
-    verification_status: partially_verified   # page 200 + structure du tableau relevée sur le Pi ; reste à confirmer sur la page entière
+    verification_status: verified   # 2e smoke réel : 22 CZIB lus. Réserve : pagination non vérifiée, bulletins à accès restreint absents de la liste publique
     options:
       verified_on: "2026-10-29"
 

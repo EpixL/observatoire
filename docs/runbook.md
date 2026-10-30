@@ -56,11 +56,31 @@ Corriger ensuite `endpoint_url` dans `config/sources.yaml` et passer `verificati
 docker compose --env-file .env up -d --build
 docker compose ps                                  # db: healthy ; init: exited (0) ; worker, api: running
 docker compose logs -f worker                      # « worker démarré », puis une ligne par collecte
-curl -s http://$API_BIND_ADDR:$API_HOST_PORT/healthz       # {"status":"ok"}
+curl -s http://$API_BIND_ADDR:$API_HOST_PORT/healthz       # {"status":"ok"}   (port retenu : 8100)
 curl -s http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/connectors/health | python3 -m json.tool | head -40
 ```
 Portainer : créer une stack « depuis un dépôt Git » (branche `backend`, fichier `compose.yaml`), renseigner les variables du
 `.env.example` dans l'interface, activer la construction de l'image.
+
+### Jeton d'administration (écritures : seuils, revue humaine)
+
+```bash
+openssl rand -hex 24                        # copier le résultat dans .env : ADMIN_TOKEN=…   (jamais dans Git)
+docker compose up -d api                    # prend en compte .env
+curl -s -X PUT http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/thresholds -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'content-type: application/json' -d '{"changes":[{"key":"downgrade_evals","to":1}],"reason":"essai de réactivité","confirmed":true,"expected_policy_version":"seuils-v1"}'
+curl -s http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/thresholds/history | python3 -m json.tool
+```
+Sans `ADMIN_TOKEN`, toute écriture répond `503 writes_disabled`.
+
+### La jauge
+
+```bash
+docker compose exec worker python -m app.cli evaluate-gauge        # une réévaluation immédiate (le worker le fait toutes les 5 min)
+curl -s "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/gauge?territory=FR" | python3 -m json.tool
+curl -s "http://$API_BIND_ADDR:$API_HOST_PORT/api/v1/gauge/detail?territory=flanc-est" | python3 -m json.tool
+```
+**Attendu pendant les 8 premières semaines : `non_calculable`** (référence quantitative insuffisante) — c'est le comportement voulu, pas une panne. `gauge/detail` dit pourquoi.
 
 ## 4. Surveillance (critère « 72 h de fonctionnement »)
 
@@ -78,14 +98,29 @@ Critère de réussite à 72 h : chaque source active a `last_success_at` récent
 Test de reprise après coupure : `docker compose stop worker` 10 min puis `start` ; vérifier qu'aucun document n'est dupliqué
 (`select count(*), count(distinct (source_id, external_id)) from documents;` → deux nombres égaux).
 
-## 5. Sauvegarde et restauration (manuelles pour l'instant)
+## 5. Sauvegarde, restauration, purge (décisions de David du 29/10/2026)
+
+**Sauvegarde nocturne de la base** : `pg_dump` vers `/mnt/homelab/@backups/observatoire/`, 7 jours de rétention, à côté du rsync des configs Docker (3 h 30).
+**Pas de cron installé par ce dépôt** : valider d'abord la baseline à la main.
 
 ```bash
-docker compose exec -T db pg_dump -U veille -d veille -Fc > "$DATA_DIR/backup-$(date +%F).dump"
-# restauration dans une base vide :
-docker compose exec -T db pg_restore -U veille -d veille --clean --if-exists < "$DATA_DIR/backup-AAAA-MM-JJ.dump"
+./scripts/backup-db.sh                      # écrit observatoire-AAAA-MM-JJ.dump, vérifie l'archive (pg_restore -l), supprime au-delà de 7 jours
+ls -lh /mnt/homelab/@backups/observatoire/
+# restauration dans une base vide (arrêter d'abord worker et api) :
+docker compose stop worker api
+docker compose exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists < /mnt/homelab/@backups/observatoire/observatoire-AAAA-MM-JJ.dump
+docker compose start worker api
+# une fois la baseline validée, ligne cron suggérée (à ajouter VOUS-MÊME, après le rsync de 3 h 30) :
+#   50 3 * * * cd /chemin/observatoire && ./scripts/backup-db.sh >> /mnt/homelab/@backups/observatoire/backup.log 2>&1
 ```
-Sauvegarder aussi `config/` et `.env` (hors Git). À planifier avec cron une fois l'emplacement choisi (question 5 du cadrage).
+Ne sauvegarder que le dossier `postgres/` par copie de fichiers ou instantané Btrfs n'est **pas** fiable (écriture en cours + `chattr +C`) : `pg_dump` fait foi. Sauvegarder aussi `config/` et `.env` (hors Git).
+
+**Purge de l'historique à 12 mois** (rétention décidée) : automatique une fois par jour dans le worker ; à tester avant :
+```bash
+docker compose exec worker python -m app.cli purge-history --dry-run     # compte ce qui serait supprimé, ne supprime rien
+docker compose exec worker python -m app.cli purge-history               # supprime (12 mois) — les décisions humaines et ce qui les fonde sont conservés
+```
+Les seuils, leur historique et les instantanés de jauge ne sont jamais purgés.
 
 ## 6. Mise à jour, retour arrière
 
@@ -93,8 +128,8 @@ Sauvegarder aussi `config/` et `.env` (hors Git). À planifier avec cron une foi
 git pull origin backend && docker compose up -d --build     # les migrations s'appliquent via le service « init »
 docker compose exec worker python -m app.cli migrate        # (manuel, idempotent)
 ```
-Retour arrière de schéma (après sauvegarde !) : `docker compose run --rm --entrypoint alembic init -c /app/alembic.ini downgrade 0001`
-(supprime les tables du lot 2 et leurs données). Retour à la version précédente du code : `git checkout <commit>` puis `up -d --build`.
+Retour arrière de schéma (après sauvegarde !) : `docker compose run --rm --entrypoint alembic init -c /app/alembic.ini downgrade 0002`
+(retire le lot 3 : seuils, instantanés, annotations) ou `downgrade 0001` (retire aussi le lot 2). **Les données de ces tables sont perdues** : sauvegarder avant. Retour à la version précédente du code : `git checkout <commit>` puis `up -d --build`.
 
 ## 7. Dépannage
 
@@ -113,6 +148,6 @@ Retour arrière de schéma (après sauvegarde !) : `docker compose run --rm --en
 ## 8. Sécurité
 
 - Aucun secret dans Git, les logs ni les fixtures. Les messages d'erreur masquent `key=`, `token=`, `password=`… (`sanitize_error`).
-- Seul l'API est publié, sur l'adresse LAN choisie. Elle est en lecture seule et sans authentification à ce stade : ne pas l'ouvrir hors du LAN (pas de redirection de port, pas d'UPnP).
+- Seul l'API est publié, sur l'adresse LAN choisie (port 8100). Les lectures sont libres sur le LAN ; les écritures exigent `ADMIN_TOKEN` (désactivées s'il est vide). Ne pas l'ouvrir hors du LAN (pas de redirection de port, pas d'UPnP).
 - Le worker est le seul service avec accès Internet sortant.
 - Les redirections vers un domaine hors liste blanche sont refusées (`domain_rejected`).

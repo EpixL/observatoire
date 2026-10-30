@@ -99,6 +99,23 @@ def cmd_purge(args, settings):
     print({"snapshots_supprimes": purge_all(_factory(settings), settings)})
 
 
+def cmd_purge_history(args, settings):
+    from app.normalization.dates import utcnow
+    from app.retention import purge_history
+    with session_scope(_factory(settings)) as s:
+        print(purge_history(s, utcnow(), months=args.months, dry_run=args.dry_run))
+
+
+def cmd_gauge(args, settings):
+    from app.gauge.config import load_gauge_config
+    from app.gauge.snapshots import evaluate_all
+    from app.normalization.dates import utcnow
+    cfg = load_gauge_config(str(settings.config_dir))
+    with session_scope(_factory(settings)) as s:
+        for x in evaluate_all(s, cfg, utcnow()):
+            print(f"{x.territory:<10} {x.status:<14} palier={x.palier} (critères: {x.raw_palier}) règle={x.rule_id} couverture={'oui' if x.coverage_satisfied else 'non'}")
+
+
 def cmd_verify(args, settings):
     from app.events.provenance import verify_all
     with session_scope(_factory(settings)) as s:
@@ -120,6 +137,8 @@ def main(argv=None):
     p = sub.add_parser("discover-feeds"); p.add_argument("source"); p.set_defaults(fn=cmd_discover)
     p = sub.add_parser("process"); p.add_argument("--limit", type=int, default=500); p.set_defaults(fn=cmd_process)
     sub.add_parser("purge-snapshots").set_defaults(fn=cmd_purge)
+    p = sub.add_parser("purge-history"); p.add_argument("--months", type=int, default=12); p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_purge_history)
+    sub.add_parser("evaluate-gauge").set_defaults(fn=cmd_gauge)
     sub.add_parser("verify-provenance").set_defaults(fn=cmd_verify)
     args = ap.parse_args(argv)
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")

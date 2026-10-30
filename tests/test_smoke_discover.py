@@ -38,3 +38,13 @@ def test_smoke_reports_verdicts_without_database(settings, tmp_path):
     assert (tmp_path / "raw" / "cert-fr-alertes.xml").exists()
     report = {"results": list(rows.values())}
     assert "cert-fr-alertes" in render(report)
+
+
+def test_smoke_sample_title_is_the_most_recent_item_not_the_first():
+    from app.collectors.base import FetchedItem
+    from app.smoke import _latest
+    items = [FetchedItem("a", "u", "Vieil article (2015)", "t", published_raw="Fri, 24 Jul 2015 10:00:00 +0200"),
+             FetchedItem("b", "u", "Article récent", "t", published_raw="Wed, 28 Oct 2026 08:00:00 +0100"),
+             FetchedItem("c", "u", "Sans date", "t")]
+    assert _latest(items) == "Article récent"
+    assert _latest([FetchedItem("c", "u", "Sans date", "t")]) == "Sans date"

@@ -36,6 +36,8 @@ services:
       COLLECTOR_JITTER_FRACTION: ${COLLECTOR_JITTER_FRACTION:-0.2}
       COLLECTOR_RESPECT_ROBOTS: ${COLLECTOR_RESPECT_ROBOTS:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GAUGE_EVAL_INTERVAL_S: ${GAUGE_EVAL_INTERVAL_S:-300}
+      HISTORY_RETENTION_MONTHS: ${HISTORY_RETENTION_MONTHS:-12}
     depends_on:
       db: {condition: service_healthy}
     networks: [internal]
@@ -58,7 +60,10 @@ services:
     image: veille-backend:local
     entrypoint: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
-    environment: *app_env
+    environment:
+      <<: *app_env
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}     # vide = écritures désactivées
+      ADMIN_ACTOR: ${ADMIN_ACTOR:-admin}
     ports:
       # Publié uniquement sur l'adresse LAN choisie, sur le port choisi (rien en dur ici).
       - "${API_BIND_ADDR:?définir API_BIND_ADDR}:${API_HOST_PORT:?définir API_HOST_PORT}:8000"

@@ -1,22 +1,22 @@
 # Lot 0 — Cadrage (réponses à la section 16 du plan)
 
 *Rédigé le 29 octobre 2026 à partir de ce que David a déjà indiqué. Tout ce qui n'est pas connu est
-listé en « Questions pour David » en bas : je n'ai rien décidé à sa place.*
+listé en « Questions encore ouvertes » en bas ; les décisions de David du 29/10 sont dans leur tableau.*
 
 ## 1. Hôte
 
 | Élément | Valeur connue | À préciser |
 |---|---|---|
-| Matériel | Raspberry Pi 5 | RAM (4, 8 ou 16 Go ?) |
+| Matériel | Raspberry Pi 5, **16 Go de RAM** | — |
 | Architecture | arm64 | — |
 | OS | Debian 13 | — |
 | Conteneurs | Docker + Portainer déjà en place | version de Docker / plugin Compose |
 | Réseau | IP LAN 192.168.1.50 | Ethernet ou Wi-Fi ? IPv6 actif ? |
-| Stockage | Btrfs ; données sur le disque `/mnt/homelab` (pas le disque système) | **support : carte SD, SSD USB ou NVMe ?** (voir risque ci-dessous) ; espace libre |
+| Stockage | Btrfs ; données sur `/mnt/homelab` : **disque dur USB mécanique** de 5,5 To (3,8 To libres) ; système sur SSD USB de 120 Go, à ne pas utiliser pour les données | — |
 
-**Risque à connaître : le support de stockage.** PostgreSQL écrit en continu. Sur une carte SD, ce n'est pas
-recommandé (usure, corruptions lors des coupures). Un SSD (USB ou NVMe) est fortement conseillé pour le dossier
-de données. Btrfs ajoute une particularité : son mode « copy-on-write » fragmente les bases de données ; on le
+**Risque à connaître : le disque de données est mécanique.** PostgreSQL y fait de petites écritures aléatoires (lent, mais très
+largement suffisant pour ce volume) ; un disque dur n'a pas le problème d'usure d'une carte SD, mais supporte mal les coupures
+brutales pendant une écriture : d'où les sauvegardes `pg_dump`. Btrfs ajoute une particularité : son mode « copy-on-write » fragmente les bases de données ; on le
 désactive pour le dossier de PostgreSQL (`chattr +C`, voir `docs/runbook.md`).
 
 **Compatibilité arm64 (vérifiée).** Images Docker : `python:3.13-slim-bookworm` et `postgres:16-alpine` existent en
@@ -25,7 +25,7 @@ Dépendances Python : les 29 paquets épinglés de `backend/requirements.txt` on
 `aarch64` (téléchargement de contrôle effectué pour cette plateforme).
 
 **Empreinte prévue (estimation, à mesurer sur le Pi).** Limites mémoire par défaut : PostgreSQL 768 Mo,
-chaque service Python 384 Mo. Aucun benchmark n'a été fait (je n'ai pas accès au Pi).
+chaque service Python 384 Mo (large marge avec 16 Go). Aucun benchmark n'a été fait.
 
 ## 2. Périmètre
 
@@ -51,8 +51,8 @@ chaque service Python 384 Mo. Aucun benchmark n'a été fait (je n'ai pas accès
 | Sujet | Proposition du plan | État |
 |---|---|---|
 | Snapshots bruts | 90 jours | **Implémenté** : purge quotidienne par le worker (`purge-snapshots` en manuel). Le texte normalisé est conservé. |
-| Historique normalisé | 12 mois | **Non implémenté** (aucune suppression automatique). À décider avec David avant le lot 6. |
-| Sauvegarde | quotidienne base + configs | **Non automatisée.** Commande `pg_dump` et restauration décrites dans `docs/runbook.md` ; à planifier sur le Pi. |
+| Historique normalisé | 12 mois | **Implémenté** (`purge-history`, quotidienne dans le worker, `--dry-run` disponible) : supprime documents, versions, affirmations, preuves et événements de plus de 12 mois, **sauf** ce sur quoi s'appuie une décision humaine ; les seuils, leur historique et les instantanés de jauge sont conservés. |
+| Sauvegarde | quotidienne base + configs | **Script fourni, non planifié** (`scripts/backup-db.sh` : `pg_dump`, vérification de l'archive, 7 jours) ; à lancer à la main puis à planifier après validation de la baseline. |
 
 ## 5. Critères de gravité et de couverture
 
@@ -68,18 +68,25 @@ Vigipirate : page anti-robot) — désactivées, sans contournement. Quotas et l
 IODA indique un copyright Georgia Tech). Détail : `docs/source-register.md`. Le critère de sortie du lot 0 sera rempli après le second smoke et la relecture
 des conditions d'utilisation par David (question 8).
 
-## Questions pour David
+## Décisions de David du 29/10/2026
 
-1. **Matériel** : combien de RAM sur le Pi ? Le dossier de données sera-t-il sur SSD/NVMe (et non carte SD) ? Quel espace libre ?
-2. **Ports** : quel port libre pour l'API (variable `API_HOST_PORT`) ? Une liste des ports déjà utilisés accélérerait l'audit.
-3. **Zones secondaires** (3 à 5 recommandées, plan §16). Pistes à valider ou rejeter, par intérêt direct pour la France
-   (ressortissants, transports aériens, énergie) : flanc est de l'Europe (Ukraine, Russie, Biélorussie, Pologne, États baltes),
-   Méditerranée orientale et Moyen-Orient (Israël, Liban, Iran, Syrie), Sahel. Quelles zones souhaites-tu ?
-4. **Niveau de notifications** (pour le lot 7) : seulement les décisions officielles ; officielles + A3 ; ou officielles + A2/A3 ?
-5. **Rétention** : 12 mois d'historique normalisé te convient-il ? Veux-tu des sauvegardes quotidiennes automatiques, et où les stocker (disque externe, NAS) ?
-6. **Couverture pour autoriser « 0 »** : la proposition du plan est trois familles obligatoires (autorités/mesures,
-   faits régionaux corroborables, mesure technique). Es-tu d'accord pour la tester telle quelle au lot 3 ?
-7. **Contact du User-Agent** : un e-mail ou une URL de contact (variable `COLLECTOR_CONTACT`) sera visible des sites
-   sources. Lequel veux-tu y mettre ?
-8. **Conditions d'utilisation** : peux-tu consulter, ou me dire de chercher, celles de France Diplomatie, EASA, CERT-FR,
-   SGDSN, IODA pour confirmer les cadences autorisées avant de resserrer les intervalles (aujourd'hui 5 à 15 min) ?
+*(relayées par la session homelab après le second smoke, puis ma reprise du travail confirmée par David le 30/10 : « Go vas-y ok »)*
+
+| # | Sujet | Décision | Où c'est appliqué |
+|---|---|---|---|
+| 1 | Matériel | Pi 5 avec **16 Go de RAM** (vérifié). Données sur `/mnt/homelab` : disque dur USB **mécanique** de 5,5 To, 3,8 To libres, Btrfs. Le système est sur un SSD USB de 120 Go, **à ne pas utiliser pour les données**. `chattr +C` sur `postgres/`. | `.env.example` (`DATA_DIR=/mnt/homelab/veille`), `docs/runbook.md` |
+| 2 | Port de l'API | `API_HOST_PORT=8100` (vérifié libre ; 8080 et 8090 sont pris) | `.env.example` |
+| 3 | Zones secondaires | **Une seule** : le flanc est de l'Europe (Ukraine, Russie, Biélorussie, Pologne, Lituanie, Lettonie, Estonie, Moldavie) | `config/territories.yaml`, `config/zones.yaml`, entités IODA de `config/sources.yaml` |
+| 4 | Notifications (lot 7, rien d'implémenté) | Décisions officielles + A3 | `docs/api-contract-backend-proposal.md` (`officiel_a3`) |
+| 5 | Couverture pour autoriser « 0 » | Les 3 familles obligatoires du plan, telles quelles | `config/coverage-profiles.yaml`, seuil `coverage_families = 3` |
+| 6 | Rétention et sauvegarde | 12 mois d'historique normalisé ; `pg_dump` nocturne vers `/mnt/homelab/@backups/observatoire/`, 7 jours de rétention, à côté du rsync des configs Docker (3 h 30). **Script et doc fournis, pas de cron** : la baseline doit d'abord être validée à la main. | `backend/app/retention.py` (purge 12 mois), `scripts/backup-db.sh`, `docs/runbook.md` §5 |
+| 7 | `COLLECTOR_CONTACT` | À terme, l'URL d'une page de contact sur davlab.fr (créée au lot 6). D'ici là `smoke-test`. **Aucune adresse e-mail personnelle dans le dépôt.** | `.env.example` |
+| 8 | Conditions d'utilisation | À chercher par la session backend ; si bloqué, le noter | `docs/source-register.md` (section « Conditions d'utilisation ») |
+
+## Questions encore ouvertes
+
+1. **Vigipirate** : aucune source officielle accessible sans contournement n'est encore identifiée (voir `docs/source-register.md`). Tant que ce n'est pas résolu, la famille « autorités et mesures » repose sur EASA et la page des conseils aux voyageurs.
+2. **Conditions d'utilisation** : j'ai seulement pu lire des extraits de recherche (le cloud ne résout aucun domaine source). À confirmer en lisant les vraies pages, surtout EASA, IODA et France 24 — voir le tableau.
+3. **Notifications** : les niveaux sont décidés, mais le canal Telegram n'existe pas avant le lot 7.
+4. **Jeton d'administration** : un `ADMIN_TOKEN` doit être généré dans `.env` du Pi pour autoriser les écritures (seuils, revue humaine). Sans lui, elles restent désactivées.
+5. **Qualification humaine** : les paliers 70/85/100 n'existent que par revue humaine d'un événement. Qui fait cette revue, et à quelle fréquence au pilote ?

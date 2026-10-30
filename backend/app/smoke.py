@@ -16,7 +16,14 @@ from app.collectors.http import PoliteClient
 from app.collectors.registry import SourceConfig
 from app.config import Settings
 from app.models import Source
-from app.normalization.dates import utcnow
+from app.normalization.dates import parse_publication_date, utcnow
+
+
+def _latest(items) -> str:
+    """Titre de l'élément le plus RÉCENT (les flux CERT-FR mélangent des articles de 2014 et de 2026 : le premier n'est pas le plus récent)."""
+    dated = [(parse_publication_date(i.published_raw).value, i) for i in items]
+    dated = [(d, i) for d, i in dated if d is not None]
+    return (max(dated, key=lambda t: t[0])[1] if dated else items[0]).title
 
 
 def smoke_one(cfg: SourceConfig, http: PoliteClient, save_dir: Path | None) -> dict:
@@ -32,7 +39,7 @@ def smoke_one(cfg: SourceConfig, http: PoliteClient, save_dir: Path | None) -> d
     row.update(
         http_status=res.http_status, final_url=res.final_url, outcome=res.outcome, items=len(res.items),
         observations=len(res.observations), duration_ms=int((time.monotonic() - t0) * 1000),
-        sample_title=res.items[0].title[:120] if res.items else None,
+        sample_title=_latest(res.items)[:120] if res.items else None,
         undated_items=sum(1 for i in res.items if not i.published_raw) if cfg.access_mode == "feed" else None,
         etag_supported=bool(res.etag), last_modified_supported=bool(res.last_modified), error=res.error,
     )
