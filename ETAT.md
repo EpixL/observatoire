@@ -1,6 +1,22 @@
 # ETAT — session A (backend), lots 0 à 3 (lot 3 partiel)
 
-*Branche `backend` · mise à jour du 30 octobre 2026 · rien n'est fusionné dans `main` · je m'arrête ici et j'attends ta validation avant d'aller plus loin.*
+*Branche `backend` · mise à jour du 30 octobre 2026 (smoke 3 + préparation du déploiement) · rien n'est fusionné dans `main` · je m'arrête ici et j'attends ta validation avant d'aller plus loin.*
+
+
+## 0. Mise à jour du 30/10/2026 (après le smoke 3 du Pi, code 133aace)
+
+**Smoke 3 : 6 sources actives OK** (France Diplomatie conseils, EASA 22, IODA 3 événements, CERT-FR 40 + 40, France 24 24). Ce qui change :
+- **Vigipirate : abandonnée proprement.** `vigipirate-gouv` → 301 vers `info.gouv.fr` (hors liste blanche), puis 403 même avec un User-Agent honnête. Passée en `blocked_by_site`, désactivée, motif écrit. Plus de source Vigipirate accessible honnêtement : ni contournement, ni deuxième tentative.
+- **Le « 0 » reste-t-il atteignable sans Vigipirate ? Oui.** Le profil de couverture (`config/coverage-profiles.yaml`) ne la cite pas : famille « autorités » = EASA + page des conseils France Diplomatie. **En revanche, le palier 55 (changement de posture + mesure) ne peut plus être produit automatiquement** : seule une saisie humaine du niveau Vigipirate peut l'alimenter. Limite assumée, écrite dans `docs/lot3-jauge.md`. Conséquence pratique : sans Vigipirate ni revue humaine, la jauge plafonne vers 40.
+- **OTAN** : `/en/natohq/RSS.htm` = 404. Nouvelle candidate (jamais atteinte d'ici, seulement vue en recherche) : version **/fr/** de la même page. Reste désactivée. **À relancer sur le Pi** : `cd backend && CONFIG_DIR=../config python -m app.cli discover-feeds nato-news` et me renvoyer la sortie. Si ça échoue aussi : repli = page `press_releases.htm` via un connecteur HTML (à écrire).
+- **SEAE** : recherche sans aucun RSS confirmé → **pas de candidate de flux**, honnêtement. Il faut relever la page sur le Pi (`curl -A "veille-observatoire/0.1 (smoke-test)" https://www.eeas.europa.eu/eeas/press-material_en -o eeas.html`) et me la renvoyer ; je ne peux pas écrire le connecteur sans la voir.
+- **IODA 16 s pour 9 entités : sans risque.** Les 9 requêtes sont séquentielles, avec 2 s minimum entre deux requêtes vers le même hôte (≈ 18 s au plancher), délai maximal de 20 s par requête, et une collecte toutes les 30 min : 9 requêtes par demi-heure ≈ 432/jour, très en deçà de ce qu'un service public tolère habituellement. Le seul vrai risque est la licence (usage privé), pas la charge. Un 429 est déjà traité comme état technique (pause, pas d'insistance).
+
+### Préparation du déploiement sur le Pi
+- **`docs/runbook.md` §8** : fusion des deux branches (essai à blanc fait : **un seul conflit, `ETAT.md`**, avec la commande pour garder les deux), `.env` avec secrets générés en place sans jamais les afficher, dossiers `/mnt/homelab/veille` + `chattr +C`, audit des ports, vérifications après démarrage, **protocole des 72 h** (relevés T0/24/48/72, quatre épreuves, critères de réussite et d'échec), retour arrière. Aucun cron.
+- **`compose.yaml`** : service `dashboard` sous le profil `dashboard` (build `./frontend`, qui n'existe qu'après fusion ; sans profil la stack backend démarre seule). Il joint l'API par le réseau interne (`api:8000`), pas par l'hôte. Variables `DASH_BIND_ADDR`, `DASH_HOST_PORT` (8101), `DASH_API_MODE` (mock par défaut) ajoutées à `.env.example`. `docker compose config` valide avec et sans profil.
+- **Non vérifié** : la construction de l'image nginx dans la stack (pas de démon Docker dans le cloud), l'intégration réelle front/back (B s'aligne encore sur ma proposition d'API). Je n'ai pas touché à `frontend/`.
+- **Point de vigilance** : la procédure de fusion est locale (`deploiement`) ; rien ne va dans `main` sans ta décision.
 
 ## En une phrase
 

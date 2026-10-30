@@ -60,6 +60,7 @@ Jamais additionnés entre eux ni à la jauge.
 ## Limites connues
 
 - Les paliers 55, 70, 85, 100 dépendent de sources ou de décisions humaines qui n'existent pas encore (Vigipirate désactivée ; aucune revue faite) : sur le terrain, la jauge ne dépassera guère 40 avant la mise en place de ces entrées.
+- **Sans Vigipirate** (aucune source accessible honnêtement, smoke du 30/10/2026) : le profil de couverture n'en dépend pas (famille « autorités et mesures » = EASA + page des conseils France Diplomatie), donc **le « 0 » reste atteignable** quand les trois familles sont à jour et la référence IODA a 8 semaines. En revanche **le palier 55 (changement de posture + mesure) est inatteignable automatiquement** tant que le niveau Vigipirate n'est pas saisi à la main (annotation) : c'est une limite assumée, pas un oubli.
 - La classification « événement matériel » est un jeu de règles que je propose (`engine._classify`) ; elle n'a jamais vu de vraies données de production.
 - Ni `civil_alert` ni le badge `nuclear` ne sont produits : les mentions nucléaires/radiologiques sont stockées (`nuclear_mentions` dans l'instantané, en attente de revue) mais pas exposées comme badge.
 - Pas de flux SSE, pas de journal, pas de réglages IA/notifications : lot 4 / suivants.

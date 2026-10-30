@@ -182,7 +182,7 @@ sources:
       disabled_reason: "Réponse 200 = page de défi anti-robot Gcore (smoke Pi 29/10/2026). Pas de contournement (ni UA de navigateur, ni JavaScript, ni cookies). À chercher : source officielle alternative du niveau Vigipirate (data.gouv.fr, flux, page non protégée)."
 
   - id: vigipirate-gouv
-    name: Vigipirate — niveau en cours (page gouvernement.fr, CANDIDATE)
+    name: Vigipirate — niveau en cours (page gouvernement.fr -> info.gouv.fr, INACCESSIBLE)
     organisation: Gouvernement (SGDSN / Premier ministre)
     source_type: autorite
     origin_family: sgdsn
@@ -198,11 +198,11 @@ sources:
     enabled: false
     licence: "À confirmer"
     quota_note: ""
-    verification_status: to_discover
+    verification_status: blocked_by_site
     options:
       content_selector: "main"
       expected_marker: "vigipirate"
-      disabled_reason: "Candidate de remplacement de sgdsn-vigipirate, non testée. À activer seulement si le smoke du Pi la donne OK (pas de page de défi) ET si le texte du niveau est lisible sans JavaScript."
+      disabled_reason: "Smoke Pi du 30/10/2026 : 301 vers https://www.info.gouv.fr/risques/vigipirate (hors liste blanche) ; test manuel de cette URL avec un User-Agent honnête : 403. Aucune source Vigipirate accessible honnêtement. Pas de contournement. Voies restantes : saisie humaine du niveau (annotation) ou suivi des annonces officielles."
 
   - id: france24-fr
     name: France 24 — flux d'actualité (FR)
@@ -234,7 +234,7 @@ sources:
     languages: [en, fr]
     connector: feed
     access_mode: feed
-    canonical_url: https://www.nato.int/cps/en/natohq/RSS.htm     # page officielle « RSS » de l'OTAN (dernière mise à jour 03/2023) : la découverte part d'ici
+    canonical_url: https://www.nato.int/cps/fr/natohq/RSS.htm     # smoke Pi 30/10/2026 : la version /en/ répond 404. Candidate : version /fr/ de la page « RSS » (vue en recherche, jamais atteinte d'ici). Autre repli : page https://www.nato.int/cps/en/natohq/press_releases.htm (connecteur html_page à écrire).
     endpoint_url: null          # URL exacte du flux NON confirmée -> `discover-feeds nato-news` sur le Pi, puis reporter l'URL ici
     allowed_domains: [nato.int]
     poll_interval_s: 600
@@ -254,7 +254,7 @@ sources:
     connector: feed
     access_mode: feed
     canonical_url: https://www.eeas.europa.eu/eeas/press-material_en     # liste filtrable paginée (?page=N) ; aucun RSS confirmé en recherche
-    endpoint_url: null          # soit un RSS trouvé par discover-feeds, soit un connecteur de liste (à écrire après relevé de la page sur le Pi)
+    endpoint_url: null          # AUCUNE candidate de flux : recherche du 30/10/2026 sans RSS EEAS confirmé. Voie : connecteur de liste à écrire après relevé de la page sur le Pi (curl avec UA honnête, me renvoyer le HTML). Rien à relancer avant.
     allowed_domains: [eeas.europa.eu]
     poll_interval_s: 600
     enabled: false

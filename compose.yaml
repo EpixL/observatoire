@@ -72,6 +72,26 @@ services:
     mem_limit: ${APP_MEM_LIMIT:-384m}
     networks: [internal, lan]
 
+  # Tableau de bord (session B). Code dans frontend/, absent de la branche backend : disponible APRÈS la fusion des deux branches.
+  # Profil « dashboard » : `docker compose --profile dashboard up -d --build` ; sans profil, la stack backend démarre seule.
+  dashboard:
+    profiles: [dashboard]
+    build: ./frontend
+    image: veille-dashboard:local
+    environment:
+      PORT: "8080"                                  # port INTERNE du conteneur ; le port publié vient de .env
+      API_MODE: ${DASH_API_MODE:-mock}              # mock = données fictives (bandeau) ; live = vraie API
+      API_UPSTREAM: api:8000                        # l'API est jointe par le réseau interne de la stack, pas par l'hôte
+      DNS_RESOLVER: 127.0.0.11
+    ports:
+      - "${DASH_BIND_ADDR:?définir DASH_BIND_ADDR}:${DASH_HOST_PORT:?définir DASH_HOST_PORT}:8080"
+    depends_on: [api]
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${DASH_MEM_LIMIT:-128m}
+    networks: [internal, lan]
+
 networks:
   internal:
     internal: true      # db et api n'ont pas d'accès Internet sortant
